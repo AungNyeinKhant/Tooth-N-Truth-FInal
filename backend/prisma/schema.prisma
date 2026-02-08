@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PATIENT
+  BRANCH_MANAGER
+  ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?    @unique
+  password      String
+  role          UserRole
+  firstName     String
+  lastName      String
+  phone         String?
+  profileImage  String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  patient       Patient?
+  branchManager BranchManager?
+
+  @@map("users")
+}
+
+model Patient {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  dateOfBirth     DateTime?
+  address         String?
+  emergencyContact String?
+  medicalHistory  String?   @db.Text
+  allergies       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments    Appointment[]
+  medicalRecords  MedicalRecord[]
+
+  @@map("patients")
+}
+
+model Branch {
+  id          String    @id @default(uuid())
+  name        String
+  address     String
+  phone       String
+  email       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  managers      BranchManager[]
+  doctors       Doctor[]
+  services      BranchService[]
+  appointments  Appointment[]
+  schedules     DoctorSchedule[]
+
+  @@map("branches")
+}
+
+model BranchManager {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  branchId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch    Branch @relation(fields: [branchId], references: [id])
+
+  @@map("branch_managers")
+}
+
+model Doctor {
+  id              String    @id @default(uuid())
+  branchId        String
+  firstName       String
+  lastName        String
+  specialization  String
+  phone           String?
+  email           String?    @unique
+  profileImage    String?
+  bio             String?   @db.Text
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  schedules       DoctorSchedule[]
+  appointments    Appointment[]
+
+  @@map("doctors")
+}
+
+model DoctorSchedule {
+  id          String    @id @default(uuid())
+  doctorId    String
+  branchId    String
+  dayOfWeek   Int       
+  startTime   String    
+  endTime     String    
+  slotDuration Int      @default(30) 
+  bufferTime  Int       @default(10) 
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  doctor      Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  branch      Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([doctorId, branchId, dayOfWeek])
+  @@map("doctor_schedules")
+}
+
+model Service {
+  id          String    @id @default(uuid())
+  name        String
+  description String?   @db.Text
+  duration    Int       
+  price       Decimal   @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  branches    BranchService[]
+  appointments Appointment[]
+
+  @@map("services")
+}
+
+model BranchService {
+  id        String   @id @default(uuid())
+  branchId  String
+  serviceId String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([branchId, serviceId])
+  @@map("branch_services")
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  patientId     String
+  doctorId      String
+  branchId      String
+  serviceId     String
+  appointmentDate DateTime
+  startTime     String            
+  endTime       String            
+  status        AppointmentStatus @default(PENDING)
+  notes         String?           @db.Text
+  cancelReason  String?
+  reminderSent  Boolean           @default(false)
+  isWalkIn      Boolean           @default(false)
+  tokenNumber   String?           
+  checkInTime   DateTime?         
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  patient       Patient         @relation(fields: [patientId], references: [id])
+  doctor        Doctor          @relation(fields: [doctorId], references: [id])
+  branch        Branch          @relation(fields: [branchId], references: [id])
+  service       Service         @relation(fields: [serviceId], references: [id])
+  medicalRecord MedicalRecord?
+
+  @@map("appointments")
+}
+
+model MedicalRecord {
+  id              String   @id @default(uuid())
+  patientId       String
+  appointmentId   String   @unique
+  diagnosis       String   @db.Text
+  treatment       String   @db.Text
+  prescription    String?  @db.Text
+  labResults      String?  @db.Text
+  externalLabName String?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  patient         Patient     @relation(fields: [patientId], references: [id])
+  appointment     Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@map("medical_records")
+}
+
+model SystemSettings {
+  id                String   @id @default(uuid())
+  key               String   @unique
+  value             String
+  description       String?
+  updatedAt         DateTime @updatedAt
+
+  @@map("system_settings")
+}
