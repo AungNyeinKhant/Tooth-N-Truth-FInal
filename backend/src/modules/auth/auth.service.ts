@@ -36,6 +36,11 @@ export class AuthService {
       throw new UnauthorizedException(ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS);
     }
 
+    // Check if user has a password (Google OAuth users don't)
+    if (!user.password) {
+      throw new UnauthorizedException('This account uses Google Sign-in. Please login with Google.');
+    }
+
     const isPasswordValid = await PasswordUtil.compare(
       loginDto.password,
       user.password,

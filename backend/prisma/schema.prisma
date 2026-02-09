@@ -23,8 +23,9 @@ enum AppointmentStatus {
 
 model User {
   id            String    @id @default(uuid())
-  email         String?    @unique
-  password      String
+  email         String    @unique
+  password      String?           // Optional for Google OAuth users
+  googleId      String?   @unique // For Google OAuth login
   role          UserRole
   firstName     String
   lastName      String
@@ -48,6 +49,13 @@ model Patient {
   emergencyContact String?
   medicalHistory  String?   @db.Text
   allergies       String?
+  
+  // Google Calendar Integration
+  googleCalendarEmail     String?   // The Google account connected for calendar (can differ from login email)
+  googleRefreshToken      String?   // OAuth refresh token for background syncing
+  googleCalendarConnected Boolean   @default(false)
+  calendarSyncEnabled     Boolean   @default(false)  // User can toggle auto-sync on/off
+  
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -177,6 +185,13 @@ model Appointment {
   isWalkIn      Boolean           @default(false)
   tokenNumber   String?           
   checkInTime   DateTime?         
+  
+  // Google Calendar Sync
+  googleCalendarEventId   String?   // Google Calendar event ID
+  syncedToGoogleCalendar  Boolean   @default(false)
+  lastSyncAttempt         DateTime? // Last time we tried to sync
+  syncError               String?   // Error message if sync failed
+  
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
