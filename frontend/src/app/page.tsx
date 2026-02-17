@@ -1,8 +1,19 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { Button, Card } from '@/components/ui';
 import { Calendar, Clock, MapPin, Phone, Shield, Star } from 'lucide-react';
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    // Check if user is authenticated by looking for token
+    const token = localStorage.getItem('accessToken');
+    setIsAuthenticated(!!token);
+  }, []);
+
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
@@ -17,9 +28,15 @@ export default function Home() {
             Book your appointment today and experience the difference.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register">
-              <Button size="lg">Book Appointment</Button>
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/book">
+                <Button size="lg">Book Appointment</Button>
+              </Link>
+            ) : (
+              <Link href="/register">
+                <Button size="lg">Book Appointment</Button>
+              </Link>
+            )}
             <Link href="/services">
               <Button variant="outline" size="lg">
                 Browse Services
@@ -118,11 +135,19 @@ export default function Home() {
           <p className="text-xl mb-8 opacity-90">
             Book your first appointment today and take the first step towards a healthier smile.
           </p>
-          <Link href="/register">
-            <Button variant="secondary" size="lg">
-              Book Now
-            </Button>
-          </Link>
+          {isAuthenticated ? (
+            <Link href="/book">
+              <Button variant="secondary" size="lg">
+                Book Now
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/register">
+              <Button variant="secondary" size="lg">
+                Book Now
+              </Button>
+            </Link>
+          )}
         </div>
       </section>
     </div>
