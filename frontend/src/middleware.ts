@@ -5,6 +5,8 @@ import type { NextRequest } from 'next/server';
 function getUserRoleFromToken(token: string): string | null {
   try {
     const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
+    
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)
@@ -20,10 +22,10 @@ function getUserRoleFromToken(token: string): string | null {
 }
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('accessToken')?.value || 
-                request.headers.get('authorization')?.replace('Bearer ', '');
-  
   const { pathname } = request.nextUrl;
+  
+  // Get token from cookie
+  const token = request.cookies.get('accessToken')?.value;
   
   // Public routes that don't require authentication
   const publicRoutes = ['/', '/login', '/register'];
@@ -40,7 +42,7 @@ export function middleware(request: NextRequest) {
     
     // Redirect based on role
     if (userRole === 'PATIENT') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return NextResponse.redirect(new URL('/', request.url));
     } else if (userRole === 'BRANCH_MANAGER') {
       return NextResponse.redirect(new URL('/branch-manager/dashboard', request.url));
     } else if (userRole === 'ADMIN') {
@@ -56,6 +58,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Match all paths except static files, api, etc.
     '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
   ],
 };
