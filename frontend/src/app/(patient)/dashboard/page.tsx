@@ -82,9 +82,7 @@ export default function PatientDashboard() {
       <Card>
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-4">
-          <Button>Book New Appointment</Button>
-          <Button variant="outline">View Medical History</Button>
-          <Button variant="ghost">Edit Profile</Button>
+          <Button onClick={() => router.push('/book')}>Book New Appointment</Button>
         </div>
       </Card>
 

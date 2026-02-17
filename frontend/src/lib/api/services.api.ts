@@ -1,4 +1,4 @@
-import apiClient from '../axios-instance';
+import apiClient from './axios-instance';
 import { API_ENDPOINTS } from '../constants';
 
 export const servicesApi = {

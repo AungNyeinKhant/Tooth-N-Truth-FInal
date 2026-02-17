@@ -6,11 +6,11 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui';
 import { useAuthStore, useUIStore } from '@/stores';
-import { Menu, X, User, LogOut } from 'lucide-react';
+import { Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react';
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, logout, isAuthenticated } = useAuthStore();
+  const { user, logout, isAuthenticated, getRedirectPath } = useAuthStore();
   const { toggleSidebar } = useUIStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
@@ -56,8 +56,15 @@ export function Navbar() {
                   {/* Dropdown */}
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                     <Link
-                      href="/profile"
+                      href={getRedirectPath()}
                       className="flex items-center gap-2 px-4 py-2 text-sm text-text-navy hover:bg-gray-50 rounded-t-lg"
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/profile"
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-text-navy hover:bg-gray-50"
                     >
                       <User className="w-4 h-4" />
                       Profile

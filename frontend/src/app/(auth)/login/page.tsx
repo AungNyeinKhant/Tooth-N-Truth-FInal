@@ -22,9 +22,9 @@ export default function LoginPage() {
     clearError();
     
     try {
-      await login(formData);
+      const redirectUrl = await login(formData);
       addToast('Login successful!', 'success');
-      router.push('/dashboard');
+      router.push(redirectUrl);
     } catch (error) {
       // Error is handled by the store
     }
