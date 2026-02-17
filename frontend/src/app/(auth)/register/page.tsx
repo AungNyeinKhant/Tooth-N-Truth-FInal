@@ -25,9 +25,9 @@ export default function RegisterPage() {
     clearError();
     
     try {
-      await register(formData);
-      addToast('Registration successful! Please login.', 'success');
-      router.push('/login');
+      const redirectUrl = await register(formData);
+      addToast('Registration successful! Welcome to Tooth & Truth.', 'success');
+      router.push(redirectUrl);
     } catch (error) {
       // Error is handled by the store
     }

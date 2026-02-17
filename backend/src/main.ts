@@ -3,11 +3,15 @@ import { ValidationPipe } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import helmet from "helmet";
 import * as cors from "cors";
+import * as cookieParser from "cookie-parser";
 
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Cookie parser middleware - for HttpOnly cookies
+  app.use(cookieParser());
 
   // Security middleware - Helmet
   app.use(
@@ -25,10 +29,10 @@ async function bootstrap() {
     }),
   );
 
-  // CORS configuration
+  // CORS configuration - credentials already enabled for cookies
   app.use(
     cors({
-      origin: process.env.FRONTEND_URL || "http://localhost:3001",
+      origin: process.env.FRONTEND_URL || "http://localhost:3000",
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "Accept"],

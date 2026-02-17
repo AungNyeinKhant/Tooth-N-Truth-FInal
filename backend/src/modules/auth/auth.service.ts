@@ -12,9 +12,20 @@ import { ERROR_MESSAGES } from '../../shared/constants';
 import {
   LoginDto,
   RegisterDto,
-  RefreshTokenDto,
   TokenResponseDto,
 } from './dto';
+
+interface TokenPayload {
+  sub: string;
+  email: string;
+  role: string;
+  branchId?: string;
+}
+
+interface GeneratedTokens {
+  accessToken: string;
+  refreshToken: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -23,7 +34,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async login(loginDto: LoginDto): Promise<TokenResponseDto> {
+  async login(loginDto: LoginDto): Promise<{ tokens: GeneratedTokens; user: any }> {
     const user = await this.prisma.user.findUnique({
       where: { email: loginDto.email },
       include: {
@@ -57,7 +68,7 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     return {
-      ...tokens,
+      tokens,
       user: {
         id: user.id,
         email: user.email,
@@ -69,7 +80,7 @@ export class AuthService {
     };
   }
 
-  async register(registerDto: RegisterDto): Promise<TokenResponseDto> {
+  async register(registerDto: RegisterDto): Promise<{ tokens: GeneratedTokens; user: any }> {
     const existingUser = await this.prisma.user.findUnique({
       where: { email: registerDto.email },
     });
@@ -106,7 +117,7 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     return {
-      ...tokens,
+      tokens,
       user: {
         id: user.id,
         email: user.email,
@@ -117,9 +128,9 @@ export class AuthService {
     };
   }
 
-  async refreshToken(refreshTokenDto: RefreshTokenDto): Promise<TokenResponseDto> {
+  async refreshToken(refreshToken: string): Promise<{ tokens: GeneratedTokens; user: any }> {
     try {
-      const payload = this.jwtService.verify(refreshTokenDto.refreshToken, {
+      const payload = this.jwtService.verify(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET,
       });
 
@@ -138,7 +149,7 @@ export class AuthService {
       const tokens = await this.generateTokens(user);
 
       return {
-        ...tokens,
+        tokens,
         user: {
           id: user.id,
           email: user.email,
@@ -187,8 +198,8 @@ export class AuthService {
     return user;
   }
 
-  private async generateTokens(user: any) {
-    const payload = {
+  private async generateTokens(user: any): Promise<GeneratedTokens> {
+    const payload: TokenPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
