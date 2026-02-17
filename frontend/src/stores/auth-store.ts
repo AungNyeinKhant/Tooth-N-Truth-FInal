@@ -133,14 +133,19 @@ export const useAuthStore = create<AuthStore>()(
 
       checkAuth: async () => {
         const token = localStorage.getItem("accessToken");
+        console.log("[AuthStore] checkAuth - token exists:", !!token);
+        
         if (!token) {
+          console.log("[AuthStore] checkAuth - no token, setting unauthenticated");
           set({ isAuthenticated: false, user: null });
           return;
         }
 
         set({ isLoading: true });
         try {
+          console.log("[AuthStore] checkAuth - calling /api/auth/me");
           const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
+          console.log("[AuthStore] checkAuth - success:", response.data.data);
 
           // Ensure cookie is set for SSR
           document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Lax`;
@@ -151,7 +156,8 @@ export const useAuthStore = create<AuthStore>()(
             isLoading: false,
             error: null,
           });
-        } catch (error) {
+        } catch (error: any) {
+          console.error("[AuthStore] checkAuth - error:", error.message);
           localStorage.removeItem("accessToken");
           document.cookie =
             "accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";

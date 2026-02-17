@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@/lib/constants';
 
+console.log('[Axios] API_BASE_URL:', API_BASE_URL);
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -13,24 +15,32 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');
+    console.log('[Axios] Request to:', config.url, '- Token exists:', !!token);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => {
+    console.error('[Axios] Request error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor to handle errors
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('[Axios] Response from:', response.config.url, '- Status:', response.status);
+    return response;
+  },
   async (error) => {
+    console.error('[Axios] Response error:', error.config?.url, '- Status:', error.response?.status, '- Message:', error.message);
+    
     const originalRequest = error.config;
 
     // Handle token refresh on 401 errors
     if (error.response?.status === 401 && !originalRequest._retry) {
+      console.log('[Axios] 401 error, attempting token refresh...');
       originalRequest._retry = true;
       
       try {
@@ -41,6 +51,7 @@ apiClient.interceptors.response.use(
           { withCredentials: true } // Important: Send cookies with refresh request
         );
         
+        console.log('[Axios] Token refresh successful');
         const { accessToken } = response.data.data;
         
         localStorage.setItem('accessToken', accessToken);
@@ -48,6 +59,7 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
+        console.error('[Axios] Token refresh failed:', refreshError);
         // Refresh failed, logout user
         localStorage.removeItem('accessToken');
         // Clear the accessToken cookie

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, Button, Badge } from '@/components/ui';
 import { useAuthStore } from '@/stores';
@@ -8,22 +8,41 @@ import { Calendar, User, Clock } from 'lucide-react';
 
 export default function PatientDashboard() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { user, isAuthenticated, checkAuth } = useAuthStore();
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    const init = async () => {
+      console.log('[Dashboard] Starting auth check...');
+      await checkAuth();
+      console.log('[Dashboard] Auth check complete');
+      setIsChecking(false);
+    };
+    init();
+  }, [checkAuth]);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    // Only redirect after check is complete
+    if (!isChecking && !isAuthenticated) {
+      console.log('[Dashboard] Not authenticated, redirecting to /login');
       router.push('/login');
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isChecking, isAuthenticated, router]);
 
-  if (isLoading || !isAuthenticated) {
+  // Show loading while checking auth
+  if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-cyan"></div>
+      </div>
+    );
+  }
+
+  // Show nothing while redirecting
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-text-gray">Redirecting to login...</p>
       </div>
     );
   }
