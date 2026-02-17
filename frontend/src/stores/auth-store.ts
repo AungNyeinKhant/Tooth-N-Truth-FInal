@@ -30,6 +30,9 @@ export const useAuthStore = create<AuthStore>()(
           localStorage.setItem('accessToken', accessToken);
           localStorage.setItem('refreshToken', refreshToken);
           
+          // Also set cookie for middleware SSR authentication
+          document.cookie = `accessToken=${accessToken}; path=/; max-age=86400; SameSite=Strict`;
+          
           set({
             user,
             isAuthenticated: true,
@@ -62,6 +65,10 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        
+        // Clear the authentication cookie
+        document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        
         set({
           user: null,
           isAuthenticated: false,
@@ -80,6 +87,10 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
         try {
           const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
+          
+          // Ensure cookie is set for SSR
+          document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Strict`;
+          
           set({
             user: response.data.data,
             isAuthenticated: true,
@@ -89,6 +100,7 @@ export const useAuthStore = create<AuthStore>()(
         } catch (error) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
+          document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
           set({
             user: null,
             isAuthenticated: false,

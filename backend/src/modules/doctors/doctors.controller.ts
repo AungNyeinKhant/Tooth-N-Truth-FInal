@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DoctorsService } from './doctors.service';
 import { Roles, CurrentUser, Public } from '../../core/decorators';
 import { UserRole } from '../../shared/enums';
@@ -48,9 +48,12 @@ export class DoctorsController {
   }
 
   @Post()
+  @ApiBearerAuth()
   @Roles(UserRole.BRANCH_MANAGER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Add new doctor' })
   @ApiResponse({ status: 201, description: 'Doctor created' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
   async create(
     @Body() createDoctorDto: CreateDoctorDto,
     @CurrentUser('branchId') branchId: string,
@@ -60,9 +63,12 @@ export class DoctorsController {
   }
 
   @Patch(':id')
+  @ApiBearerAuth()
   @Roles(UserRole.BRANCH_MANAGER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update doctor' })
   @ApiResponse({ status: 200, description: 'Doctor updated' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
   async update(
     @Param('id') id: string,
     @Body() updateDoctorDto: UpdateDoctorDto,
@@ -73,9 +79,12 @@ export class DoctorsController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
   @Roles(UserRole.BRANCH_MANAGER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete doctor (soft delete)' })
   @ApiResponse({ status: 200, description: 'Doctor deactivated' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
   async remove(
     @Param('id') id: string,
     @CurrentUser('branchId') branchId: string,

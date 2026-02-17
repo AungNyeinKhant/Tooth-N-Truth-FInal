@@ -1,7 +1,7 @@
 'use client';
 
 import { useAppointmentStore } from '@/stores';
-import { Input } from '@/components/ui';
+import { Textarea } from '@/components/ui';
 import { MapPin, User, Clock, Calendar, StickyNote } from 'lucide-react';
 
 interface StepConfirmProps {
@@ -90,8 +90,7 @@ export default function StepConfirm({ onSubmit, isSubmitting }: StepConfirmProps
           <StickyNote className="w-5 h-5 text-primary-cyan mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-text-light mb-2">Additional Notes (Optional)</p>
-            <Input
-              as="textarea"
+            <Textarea
               rows={3}
               placeholder="Any special requests or concerns..."
               value={notes}
