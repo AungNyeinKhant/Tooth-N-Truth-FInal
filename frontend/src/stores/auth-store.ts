@@ -1,27 +1,30 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { User, AuthState, LoginCredentials, RegisterData } from '@/types';
-import apiClient from '@/lib/api/axios-instance';
-import { API_ENDPOINTS } from '@/lib/constants';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import { User, AuthState, LoginCredentials, RegisterData } from "@/types";
+import apiClient from "@/lib/api/axios-instance";
+import { API_ENDPOINTS } from "@/lib/constants";
 
 // Helper function to get redirect URL based on user role
 const getRedirectUrl = (role: string): string => {
   switch (role) {
-    case 'PATIENT':
-      return '/';
-    case 'BRANCH_MANAGER':
-      return '/branch-manager/dashboard';
-    case 'ADMIN':
-      return '/admin/dashboard';
+    case "PATIENT":
+      return "/";
+
+    case "BRANCH_MANAGER":
+      return "/branch-manager/dashboard";
+    case "ADMIN":
+      return "/admin/dashboard";
     default:
-      return '/';
+      return "/";
   }
 };
 
 interface AuthStore extends AuthState {
   login: (credentials: LoginCredentials) => Promise<string>;
   register: (data: RegisterData) => Promise<string>;
+
   logout: () => Promise<void>;
+
   checkAuth: () => Promise<void>;
   clearError: () => void;
   setUser: (user: User | null) => void;
@@ -39,16 +42,19 @@ export const useAuthStore = create<AuthStore>()(
       login: async (credentials) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials);
+          const response = await apiClient.post(
+            API_ENDPOINTS.AUTH.LOGIN,
+            credentials,
+          );
           const { accessToken, user } = response.data.data;
-          
+
           // Store only access token in localStorage
           // Refresh token is now in HttpOnly cookie (handled by backend)
-          localStorage.setItem('accessToken', accessToken);
-          
+          localStorage.setItem("accessToken", accessToken);
+
           // Also set cookie for middleware SSR authentication
           document.cookie = `accessToken=${accessToken}; path=/; max-age=86400; SameSite=Lax`;
-          
+
           set({
             user,
             isAuthenticated: true,
@@ -61,7 +67,7 @@ export const useAuthStore = create<AuthStore>()(
         } catch (error: any) {
           set({
             isLoading: false,
-            error: error.response?.data?.message || 'Login failed',
+            error: error.response?.data?.message || "Login failed",
           });
           throw error;
         }
@@ -71,16 +77,19 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           // Register the user (auto-login happens on backend)
-          const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
+          const response = await apiClient.post(
+            API_ENDPOINTS.AUTH.REGISTER,
+            data,
+          );
           const { accessToken, user } = response.data.data;
-          
+
           // Store only access token in localStorage
           // Refresh token is now in HttpOnly cookie (handled by backend)
-          localStorage.setItem('accessToken', accessToken);
-          
+          localStorage.setItem("accessToken", accessToken);
+
           // Also set cookie for middleware SSR authentication
           document.cookie = `accessToken=${accessToken}; path=/; max-age=86400; SameSite=Lax`;
-          
+
           set({
             user,
             isAuthenticated: true,
@@ -93,7 +102,7 @@ export const useAuthStore = create<AuthStore>()(
         } catch (error: any) {
           set({
             isLoading: false,
-            error: error.response?.data?.message || 'Registration failed',
+            error: error.response?.data?.message || "Registration failed",
           });
           throw error;
         }
@@ -105,14 +114,15 @@ export const useAuthStore = create<AuthStore>()(
           await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
         } catch (error) {
           // Even if backend fails, proceed with client-side logout
-          console.error('Logout error:', error);
+          console.error("Logout error:", error);
         }
-        
-        localStorage.removeItem('accessToken');
-        
+
+        localStorage.removeItem("accessToken");
+
         // Clear the authentication cookie
-        document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        
+        document.cookie =
+          "accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+
         set({
           user: null,
           isAuthenticated: false,
@@ -122,7 +132,7 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       checkAuth: async () => {
-        const token = localStorage.getItem('accessToken');
+        const token = localStorage.getItem("accessToken");
         if (!token) {
           set({ isAuthenticated: false, user: null });
           return;
@@ -131,10 +141,10 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
         try {
           const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
-          
+
           // Ensure cookie is set for SSR
           document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Lax`;
-          
+
           set({
             user: response.data.data,
             isAuthenticated: true,
@@ -142,8 +152,9 @@ export const useAuthStore = create<AuthStore>()(
             error: null,
           });
         } catch (error) {
-          localStorage.removeItem('accessToken');
-          document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          localStorage.removeItem("accessToken");
+          document.cookie =
+            "accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
           set({
             user: null,
             isAuthenticated: false,
@@ -157,12 +168,15 @@ export const useAuthStore = create<AuthStore>()(
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       getRedirectPath: () => {
         const { user } = get();
-        return user ? getRedirectUrl(user.role) : '/';
+        return user ? getRedirectUrl(user.role) : "/";
       },
     }),
     {
-      name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
-    }
-  )
+      name: "auth-storage",
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    },
+  ),
 );
