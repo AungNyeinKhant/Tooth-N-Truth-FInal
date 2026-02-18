@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui';
 import { useAuthStore, useUIStore } from '@/stores';
@@ -10,11 +10,17 @@ import { Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react';
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout, isAuthenticated, getRedirectPath } = useAuthStore();
   const { toggleSidebar } = useUIStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const isAuthPage = pathname === '/login' || pathname === '/register';
+
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
+  };
 
   if (isAuthPage) return null;
 
@@ -70,7 +76,7 @@ export function Navbar() {
                       Profile
                     </Link>
                     <button
-                      onClick={logout}
+                      onClick={handleLogout}
                       className="flex items-center gap-2 w-full px-4 py-2 text-sm text-status-error hover:bg-red-50 rounded-b-lg"
                     >
                       <LogOut className="w-4 h-4" />

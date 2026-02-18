@@ -1,22 +1,27 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, Button } from '@/components/ui';
-import { useAppointmentStore, useAuthStore, useUIStore } from '@/stores';
-import { branchesApi, servicesApi, doctorsApi, appointmentsApi } from '@/lib/api';
-import StepBranch from './booking-wizard/step-branch';
-import StepService from './booking-wizard/step-service';
-import StepDoctor from './booking-wizard/step-doctor';
-import StepDateTime from './booking-wizard/step-datetime';
-import StepConfirm from './booking-wizard/step-confirm';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, Button } from "@/components/ui";
+import { useAppointmentStore, useAuthStore, useUIStore } from "@/stores";
+import {
+  branchesApi,
+  servicesApi,
+  doctorsApi,
+  appointmentsApi,
+} from "@/lib/api";
+import StepBranch from "./booking-wizard/step-branch";
+import StepService from "./booking-wizard/step-service";
+import StepDoctor from "./booking-wizard/step-doctor";
+import StepDateTime from "./booking-wizard/step-datetime";
+import StepConfirm from "./booking-wizard/step-confirm";
 
 const steps = [
-  { id: 1, name: 'Select Branch' },
-  { id: 2, name: 'Select Service' },
-  { id: 3, name: 'Select Doctor' },
-  { id: 4, name: 'Select Date & Time' },
-  { id: 5, name: 'Confirm' },
+  { id: 1, name: "Select Branch" },
+  { id: 2, name: "Select Service" },
+  { id: 3, name: "Select Doctor" },
+  { id: 4, name: "Select Date & Time" },
+  { id: 5, name: "Confirm" },
 ];
 
 export function BookingWizard() {
@@ -25,6 +30,15 @@ export function BookingWizard() {
   const { user } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const extractList = (response: any) => {
+    const data = response?.data;
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object") {
+      if (Array.isArray(data.data)) return data.data;
+      if (data.data && Array.isArray(data.data.data)) return data.data.data;
+    }
+    return [];
+  };
 
   const {
     selectedBranch,
@@ -55,10 +69,25 @@ export function BookingWizard() {
           branchesApi.getAll(),
           servicesApi.getAll(),
         ]);
-        setBranches(branchesRes.data.data);
-        setServices(servicesRes.data.data);
+
+        console.log("[Booking] Raw branchesRes:", branchesRes);
+        console.log("[Booking] Raw branchesRes.data:", branchesRes.data);
+
+        // The API returns { data: [...], meta: {...} }
+        // axios adds another .data wrapper, so we access branchesRes.data.data
+        const branchesList = extractList(branchesRes);
+        console.log("[Booking] Final branchesList:", branchesList);
+
+        const servicesList = extractList(servicesRes);
+        console.log("[Booking] Final servicesList:", servicesList);
+
+        setBranches(Array.isArray(branchesList) ? branchesList : []);
+        setServices(Array.isArray(servicesList) ? servicesList : []);
       } catch (error) {
-        addToast('Failed to load initial data', 'error');
+        console.error("Failed to load initial data:", error);
+        addToast("Failed to load initial data", "error");
+        setBranches([]);
+        setServices([]);
       } finally {
         setLoading(false);
       }
@@ -74,9 +103,21 @@ export function BookingWizard() {
         setLoading(true);
         try {
           const res = await doctorsApi.getAll(selectedBranch.id);
-          setDoctors(res.data.data);
+          // Handle doctors response - API may return array or { data: [...], meta: {...} }
+          let doctorsData = res.data;
+          if (
+            doctorsData &&
+            typeof doctorsData === "object" &&
+            "data" in doctorsData &&
+            !Array.isArray(doctorsData)
+          ) {
+            doctorsData = doctorsData.data;
+          }
+          setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
         } catch (error) {
-          addToast('Failed to load doctors', 'error');
+          console.error("Failed to load doctors:", error);
+          addToast("Failed to load doctors", "error");
+          setDoctors([]);
         } finally {
           setLoading(false);
         }
@@ -92,15 +133,27 @@ export function BookingWizard() {
       const loadSlots = async () => {
         setLoading(true);
         try {
-          const dateStr = selectedDate.toISOString().split('T')[0];
+          const dateStr = selectedDate.toISOString().split("T")[0];
           const res = await doctorsApi.getAvailableSlots(
             selectedDoctor.id,
             dateStr,
-            selectedService.id
+            selectedService.id,
           );
-          setAvailableSlots(res.data.data);
+          // Handle slots response - API may return array or { data: [...], meta: {...} }
+          let slotsData = res.data;
+          if (
+            slotsData &&
+            typeof slotsData === "object" &&
+            "data" in slotsData &&
+            !Array.isArray(slotsData)
+          ) {
+            slotsData = slotsData.data;
+          }
+          setAvailableSlots(Array.isArray(slotsData) ? slotsData : []);
         } catch (error) {
-          addToast('Failed to load available slots', 'error');
+          console.error("Failed to load available slots:", error);
+          addToast("Failed to load available slots", "error");
+          setAvailableSlots([]);
         } finally {
           setLoading(false);
         }
@@ -108,7 +161,14 @@ export function BookingWizard() {
 
       loadSlots();
     }
-  }, [selectedDoctor, selectedDate, selectedService, setAvailableSlots, setLoading, addToast]);
+  }, [
+    selectedDoctor,
+    selectedDate,
+    selectedService,
+    setAvailableSlots,
+    setLoading,
+    addToast,
+  ]);
 
   const handleNext = () => {
     if (currentStep < steps.length) {
@@ -123,8 +183,14 @@ export function BookingWizard() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedBranch || !selectedService || !selectedDoctor || !selectedDate || !selectedSlot) {
-      addToast('Please complete all steps', 'error');
+    if (
+      !selectedBranch ||
+      !selectedService ||
+      !selectedDoctor ||
+      !selectedDate ||
+      !selectedSlot
+    ) {
+      addToast("Please complete all steps", "error");
       return;
     }
 
@@ -134,16 +200,19 @@ export function BookingWizard() {
         branchId: selectedBranch.id,
         doctorId: selectedDoctor.id,
         serviceId: selectedService.id,
-        appointmentDate: selectedDate.toISOString().split('T')[0],
+        appointmentDate: selectedDate.toISOString().split("T")[0],
         startTime: selectedSlot.startTime,
         notes,
       });
 
-      addToast('Appointment booked successfully!', 'success');
+      addToast("Appointment booked successfully!", "success");
       reset();
-      router.push('/appointments');
+      router.push("/appointments");
     } catch (error: any) {
-      addToast(error.response?.data?.message || 'Failed to book appointment', 'error');
+      addToast(
+        error.response?.data?.message || "Failed to book appointment",
+        "error",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -167,24 +236,24 @@ export function BookingWizard() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className='max-w-4xl mx-auto'>
       {/* Progress Steps */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
+      <div className='mb-8'>
+        <div className='flex items-center justify-between'>
           {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
+            <div key={step.id} className='flex items-center'>
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
                   step.id <= currentStep
-                    ? 'bg-primary-cyan text-white'
-                    : 'bg-gray-200 text-text-gray'
+                    ? "bg-primary-cyan text-white"
+                    : "bg-gray-200 text-text-gray"
                 }`}
               >
                 {step.id}
               </div>
               <span
                 className={`ml-2 text-sm font-medium hidden md:block ${
-                  step.id <= currentStep ? 'text-text-navy' : 'text-text-light'
+                  step.id <= currentStep ? "text-text-navy" : "text-text-light"
                 }`}
               >
                 {step.name}
@@ -192,7 +261,7 @@ export function BookingWizard() {
               {index < steps.length - 1 && (
                 <div
                   className={`w-12 md:w-24 h-1 mx-2 md:mx-4 ${
-                    step.id < currentStep ? 'bg-primary-cyan' : 'bg-gray-200'
+                    step.id < currentStep ? "bg-primary-cyan" : "bg-gray-200"
                   }`}
                 />
               )}
@@ -202,20 +271,28 @@ export function BookingWizard() {
       </div>
 
       {/* Step Content */}
-      <Card className="min-h-[400px]">
-        {currentStep === 1 && <StepBranch branches={branches} isLoading={isLoading} />}
-        {currentStep === 2 && <StepService services={services} isLoading={isLoading} />}
-        {currentStep === 3 && <StepDoctor doctors={doctors} isLoading={isLoading} />}
+      <Card className='min-h-[400px]'>
+        {currentStep === 1 && (
+          <StepBranch branches={branches} isLoading={isLoading} />
+        )}
+        {currentStep === 2 && (
+          <StepService services={services} isLoading={isLoading} />
+        )}
+        {currentStep === 3 && (
+          <StepDoctor doctors={doctors} isLoading={isLoading} />
+        )}
         {currentStep === 4 && (
           <StepDateTime availableSlots={availableSlots} isLoading={isLoading} />
         )}
-        {currentStep === 5 && <StepConfirm onSubmit={handleSubmit} isSubmitting={isSubmitting} />}
+        {currentStep === 5 && (
+          <StepConfirm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+        )}
       </Card>
 
       {/* Navigation Buttons */}
-      <div className="flex justify-between mt-6">
+      <div className='flex justify-between mt-6'>
         <Button
-          variant="outline"
+          variant='outline'
           onClick={handleBack}
           disabled={currentStep === 1}
         >

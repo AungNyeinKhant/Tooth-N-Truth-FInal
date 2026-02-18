@@ -8,9 +8,142 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { UserRole } from '../../shared/enums';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
 
+interface AdminAppointmentsQuery {
+  status?: string;
+  branchId?: string;
+  doctorId?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+  page: number;
+  limit: number;
+}
+
 @Injectable()
 export class AppointmentsService {
   constructor(private prisma: PrismaService) {}
+
+  async getAdminAppointments(query: AdminAppointmentsQuery) {
+    const {
+      status,
+      branchId,
+      doctorId,
+      startDate,
+      endDate,
+      search,
+      page = 1,
+      limit = 20,
+    } = query;
+
+    const where: any = {};
+
+    // Status filter
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
+
+    // Branch filter
+    if (branchId) {
+      where.branchId = branchId;
+    }
+
+    // Doctor filter
+    if (doctorId) {
+      where.doctorId = doctorId;
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      where.appointmentDate = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        where.appointmentDate.gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.appointmentDate.lte = end;
+      }
+    }
+
+    // Search by patient name or email
+    if (search) {
+      where.OR = [
+        {
+          patient: {
+            user: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+      ];
+    }
+
+    // Get total count
+    const total = await this.prisma.appointment.count({ where });
+
+    // Get paginated appointments
+    const appointments = await this.prisma.appointment.findMany({
+      where,
+      include: {
+        patient: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+        branch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration: true,
+            price: true,
+          },
+        },
+      },
+      orderBy: [
+        { appointmentDate: 'desc' },
+        { startTime: 'asc' },
+      ],
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      data: appointments,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 
   async findAll(
     userId: string,

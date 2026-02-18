@@ -19,6 +19,35 @@ import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
 export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
+  @Get('admin')
+  @ApiBearerAuth()
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all appointments for admin (with filters)' })
+  @ApiResponse({ status: 200, description: 'List of all appointments' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - admin only' })
+  async getAdminAppointments(
+    @Query('status') status?: string,
+    @Query('branchId') branchId?: string,
+    @Query('doctorId') doctorId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.appointmentsService.getAdminAppointments({
+      status,
+      branchId,
+      doctorId,
+      startDate,
+      endDate,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+  }
+
   @Get()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get appointments (filtered by user role)' })

@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
-import { AdminSidebar } from "./admin-sidebar";
-import { AdminHeader } from "@/components/layout/admin-header";
+import { ManagerHeader } from "@/components/layout/manager-header";
+import { ManagerSidebar } from "@/components/layout/manager-sidebar";
 import { Menu, X } from "lucide-react";
 
-export default function AdminLayout({
+export default function ManagerLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -17,7 +17,7 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Desktop Header */}
-      <AdminHeader />
+      <ManagerHeader />
 
       {/* Mobile Header */}
       <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
@@ -33,7 +33,7 @@ export default function AdminLayout({
               <Menu className="w-6 h-6 text-gray-600" />
             )}
           </button>
-          <span className="text-lg font-semibold text-gray-900">Admin Portal</span>
+          <span className="text-lg font-semibold text-gray-900">Manager Portal</span>
         </div>
         <div className="text-sm text-gray-600">
           {user?.firstName} {user?.lastName}
@@ -41,7 +41,7 @@ export default function AdminLayout({
       </header>
 
       {/* Sidebar */}
-      <AdminSidebar
+      <ManagerSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         user={user}
