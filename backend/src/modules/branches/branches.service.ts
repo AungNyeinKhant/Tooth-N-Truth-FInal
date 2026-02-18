@@ -1,25 +1,115 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
+import { CreateBranchDto } from './dto/create-branch.dto';
+import { UpdateBranchDto } from './dto/update-branch.dto';
 
 @Injectable()
 export class BranchesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    const branches = await this.prisma.branch.findMany({
-      where: { isActive: true },
+  async create(createBranchDto: CreateBranchDto) {
+    const existingBranch = await this.prisma.branch.findFirst({
+      where: {
+        name: createBranchDto.name,
+        isActive: true,
+      },
+    });
+
+    if (existingBranch) {
+      throw new ConflictException('Branch with this name already exists');
+    }
+
+    const branch = await this.prisma.branch.create({
+      data: {
+        name: createBranchDto.name,
+        address: createBranchDto.address,
+        phone: createBranchDto.phone,
+        email: createBranchDto.email,
+        isActive: createBranchDto.isActive ?? true,
+      },
       select: {
         id: true,
         name: true,
         address: true,
         phone: true,
         email: true,
+        isActive: true,
         createdAt: true,
       },
-      orderBy: { name: 'asc' },
     });
 
-    return branches;
+    return branch;
+  }
+
+  async findAll(query: { search?: string; status?: string; page?: number; limit?: number }) {
+    const { search, status = 'active', page = 1, limit = 10 } = query;
+
+    // Build where clause
+    const where: any = {};
+
+    // Status filter
+    if (status === 'active') {
+      where.isActive = true;
+    } else if (status === 'inactive') {
+      where.isActive = false;
+    }
+    // If status is 'all', no filter applied
+
+    // Search filter (case-insensitive)
+    if (search) {
+      where.name = {
+        contains: search,
+        mode: 'insensitive',
+      };
+    }
+
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination
+    const total = await this.prisma.branch.count({ where });
+
+    // Get paginated branches with manager info
+    const branches = await this.prisma.branch.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        phone: true,
+        email: true,
+        isActive: true,
+        createdAt: true,
+        managers: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+      skip,
+      take: limit,
+    });
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: branches,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
   }
 
   async findOne(id: string) {
@@ -112,5 +202,71 @@ export class BranchesService {
     });
 
     return doctors;
+  }
+
+  async update(id: string, updateBranchDto: UpdateBranchDto) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id },
+    });
+
+    if (!branch) {
+      throw new NotFoundException('Branch not found');
+    }
+
+    // Check for name conflict if name is being updated
+    if (updateBranchDto.name && updateBranchDto.name !== branch.name) {
+      const existingBranch = await this.prisma.branch.findFirst({
+        where: {
+          name: updateBranchDto.name,
+          isActive: true,
+          id: { not: id },
+        },
+      });
+
+      if (existingBranch) {
+        throw new ConflictException('Branch with this name already exists');
+      }
+    }
+
+    const updatedBranch = await this.prisma.branch.update({
+      where: { id },
+      data: {
+        name: updateBranchDto.name,
+        address: updateBranchDto.address,
+        phone: updateBranchDto.phone,
+        email: updateBranchDto.email,
+        isActive: updateBranchDto.isActive,
+      },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        phone: true,
+        email: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return updatedBranch;
+  }
+
+  async remove(id: string) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id },
+    });
+
+    if (!branch) {
+      throw new NotFoundException('Branch not found');
+    }
+
+    // Soft delete - set isActive to false
+    await this.prisma.branch.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return { message: 'Branch deactivated successfully' };
   }
 }

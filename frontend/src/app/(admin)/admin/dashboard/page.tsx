@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { analyticsApi } from "@/lib/api/analytics.api";
 import { StatCard, StatsGrid } from "./components/stat-card";
 import {
   Building2,
@@ -29,21 +30,11 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Replace with actual API call when endpoint is ready
-    // For now, using mock data to test the UI
     const fetchStats = async () => {
       setIsLoading(true);
       try {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        
-        // Mock data - replace with actual API call
-        setStats({
-          totalBranches: 5,
-          totalDoctors: 10,
-          totalPatients: 150,
-          totalAppointmentsToday: 12,
-        });
+        const response = await analyticsApi.getAdminStats();
+        setStats(response.data);
       } catch (error) {
         console.error("Failed to fetch stats:", error);
       } finally {
