@@ -2,11 +2,21 @@ import apiClient from './axios-instance';
 import { API_ENDPOINTS } from '../constants';
 import { BranchQuery, PaginatedBranches } from '@/types';
 
+export interface CreateManagerData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
 export interface CreateBranchData {
   name: string;
   address: string;
   phone: string;
   email?: string;
+  isActive?: boolean;
+  manager?: CreateManagerData;
 }
 
 export interface UpdateBranchData {

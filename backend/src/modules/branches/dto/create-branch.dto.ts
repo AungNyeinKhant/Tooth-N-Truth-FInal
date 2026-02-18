@@ -1,5 +1,47 @@
-import { IsString, IsEmail, IsOptional, IsBoolean, Length } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsBoolean, Length, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+class CreateManagerDto {
+  @ApiProperty({
+    description: 'Manager first name',
+    example: 'John',
+  })
+  @IsString()
+  @Length(2, 50)
+  firstName: string;
+
+  @ApiProperty({
+    description: 'Manager last name',
+    example: 'Doe',
+  })
+  @IsString()
+  @Length(2, 50)
+  lastName: string;
+
+  @ApiProperty({
+    description: 'Manager email (for login)',
+    example: 'john.doe@toothandtruth.com',
+  })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({
+    description: 'Manager phone number',
+    example: '+95 1 234 5678',
+  })
+  @IsString()
+  @Length(5, 20)
+  phone: string;
+
+  @ApiProperty({
+    description: 'Manager password (min 8 characters)',
+    example: 'SecurePass123!',
+  })
+  @IsString()
+  @Length(8, 100)
+  password: string;
+}
 
 export class CreateBranchDto {
   @ApiProperty({
@@ -19,7 +61,7 @@ export class CreateBranchDto {
   address: string;
 
   @ApiProperty({
-    description: 'Branch phone number',
+    description: 'Branch phone number (for patient contact)',
     example: '+95 1 234 5678',
   })
   @IsString()
@@ -27,7 +69,7 @@ export class CreateBranchDto {
   phone: string;
 
   @ApiPropertyOptional({
-    description: 'Branch email address',
+    description: 'Branch email address (for patient contact, optional)',
     example: 'downtown@toothandtruth.com',
   })
   @IsOptional()
@@ -42,4 +84,13 @@ export class CreateBranchDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Branch manager information (optional - can be assigned later)',
+    type: CreateManagerDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateManagerDto)
+  manager?: CreateManagerDto;
 }

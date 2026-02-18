@@ -16,7 +16,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  MoreHorizontal,
 } from "lucide-react";
 
 export default function BranchesPage() {
@@ -31,32 +30,114 @@ export default function BranchesPage() {
     totalPages: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
   const fetchBranches = useCallback(async () => {
+    console.log('[Branches] Starting fetch...');
     setIsLoading(true);
+    setError(null);
+    
     try {
       const query: BranchQuery = {
         page: meta.page,
         limit: meta.limit,
         status: statusFilter,
       };
-      
+
       if (searchQuery.trim()) {
         query.search = searchQuery.trim();
       }
 
+      console.log('[Branches] Query:', query);
       const response = await branchesApi.getAll(query);
-      setBranches(response.data.data);
-      setMeta(response.data.meta);
-    } catch (error) {
-      console.error("Failed to fetch branches:", error);
-      addToast("Failed to load branches", "error");
+      
+      console.log('[Branches] Full response:', response);
+      console.log('[Branches] Response data:', response.data);
+      console.log('[Branches] Response data type:', typeof response.data);
+
+      // Handle different response structures
+      let responseData = response.data;
+      
+      // If data is wrapped in a data property (common NestJS pattern)
+      if (responseData && typeof responseData === 'object' && 'data' in responseData && !Array.isArray(responseData.data)) {
+        responseData = responseData.data;
+      }
+      
+      console.log('[Branches] Processed responseData:', responseData);
+
+      // Validate response structure
+      if (!responseData) {
+        console.error('[Branches] No response data');
+        setError('No data received from server');
+        setBranches([]);
+        return;
+      }
+
+      // Check if response has the expected structure
+      let branchesData: Branch[] = [];
+      let metaData: PaginationMeta | null = null;
+
+      if (Array.isArray(responseData)) {
+        // API returned array directly (old format)
+        console.log('[Branches] Response is array, using directly');
+        branchesData = responseData;
+        metaData = {
+          total: responseData.length,
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+        };
+      } else if (responseData.data && Array.isArray(responseData.data)) {
+        // API returned { data: [...], meta: {...} }
+        console.log('[Branches] Response has data property');
+        branchesData = responseData.data;
+        metaData = responseData.meta || {
+          total: branchesData.length,
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+        };
+      } else {
+        console.error('[Branches] Unexpected response format:', responseData);
+        setError('Invalid data format received from server');
+        setBranches([]);
+        return;
+      }
+
+      console.log('[Branches] Branches data:', branchesData);
+      console.log('[Branches] Meta data:', metaData);
+      console.log('[Branches] Number of branches:', branchesData.length);
+
+      setBranches(branchesData);
+      setMeta(metaData);
+      
+    } catch (err: any) {
+      console.error('[Branches] Error fetching branches:', err);
+      console.error('[Branches] Error response:', err.response);
+      console.error('[Branches] Error status:', err.response?.status);
+      console.error('[Branches] Error data:', err.response?.data);
+      
+      if (err.response?.status === 401) {
+        setError('Unauthorized - Please login');
+        addToast("Please login to view branches", "error");
+        router.push("/login");
+      } else if (err.response?.status === 403) {
+        setError('Access denied - Admin permissions required');
+        addToast("Admin access required", "error");
+      } else {
+        const errorMessage = err.response?.data?.message || err.message || 'Failed to load branches';
+        setError(errorMessage);
+        addToast(errorMessage, "error");
+      }
+      
+      setBranches([]);
     } finally {
       setIsLoading(false);
+      console.log('[Branches] Fetch complete');
     }
-  }, [meta.page, meta.limit, statusFilter, searchQuery, addToast]);
+  }, [meta.page, meta.limit, statusFilter, searchQuery, addToast, router]);
 
   useEffect(() => {
     fetchBranches();
@@ -113,6 +194,15 @@ export default function BranchesPage() {
         </Link>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <p className="font-medium">Error loading branches</p>
+          <p className="text-sm">{error}</p>
+          <p className="text-xs mt-1">Check browser console for details</p>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <form onSubmit={handleSearch} className="flex-1 max-w-md">
@@ -144,6 +234,18 @@ export default function BranchesPage() {
           </select>
         </div>
       </div>
+
+      {/* Debug Info - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-gray-100 p-4 rounded-lg text-xs font-mono">
+          <p><strong>Debug Info:</strong></p>
+          <p>Loading: {isLoading ? 'Yes' : 'No'}</p>
+          <p>Error: {error || 'None'}</p>
+          <p>Branches count: {Array.isArray(branches) ? branches.length : 'Invalid'}</p>
+          <p>Total in meta: {meta.total}</p>
+          <p>Page: {meta.page}</p>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -177,6 +279,13 @@ export default function BranchesPage() {
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#00BCD4]" />
                     <p className="mt-2 text-sm text-gray-500">Loading branches...</p>
+                  </td>
+                </tr>
+              ) : !Array.isArray(branches) ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-red-500">
+                    <p>Error: Branches data is not an array</p>
+                    <p className="text-sm">Check console for details</p>
                   </td>
                 </tr>
               ) : branches.length === 0 ? (

@@ -17,58 +17,96 @@ function getUserRoleFromToken(token: string): string | null {
     const payload = JSON.parse(jsonPayload);
     return payload.role || null;
   } catch (e) {
-    console.log('[Middleware] Token decode error:', e);
     return null;
+  }
+}
+
+// Helper to check if token is expired
+function isTokenExpired(token: string): boolean {
+  try {
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return true;
+    
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    
+    // Check if token is expired
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return true;
   }
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   // Get token from cookie
   const token = request.cookies.get('accessToken')?.value;
   
-  // Debug logging
-  console.log('='.repeat(50));
-  console.log('[Middleware] Pathname:', pathname);
-  console.log('[Middleware] Token exists:', !!token);
-  console.log('[Middleware] Token value:', token ? token.substring(0, 50) + '...' : 'null');
+  // Validate token - check if it exists AND is not expired AND has valid role
+  let userRole: string | null = null;
+  let isValidToken = false;
   
-  // Public routes that don't require authentication
-  const publicRoutes = ['/', '/login', '/register'];
-  const isPublicRoute = publicRoutes.includes(pathname);
-  console.log('[Middleware] Is public route:', isPublicRoute);
-  
-  // If user is not authenticated and trying to access protected route
-  if (!token && !isPublicRoute) {
-    console.log('[Middleware] REDIRECTING to /login - no token for protected route');
+  if (token && !isTokenExpired(token)) {
+    userRole = getUserRoleFromToken(token);
+    if (userRole) {
+      isValidToken = true;
+    }
+  }
+
+  // Define route types
+  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isAdminRoute = pathname.startsWith('/admin');
+  const isBranchManagerRoute = pathname.startsWith('/branch-manager');
+
+  // 1. Auth pages (/login, /register) - ALWAYS PUBLIC
+  if (isAuthPage) {
+    if (!isValidToken) {
+      // Anonymous or invalid token - ALLOW access to login/register
+      return NextResponse.next();
+    } else {
+      // Authenticated user accessing login/register - REDIRECT to their dashboard
+      if (userRole === 'PATIENT') {
+        return NextResponse.redirect(new URL('/', request.url));
+      } else if (userRole === 'BRANCH_MANAGER') {
+        return NextResponse.redirect(new URL('/branch-manager/dashboard', request.url));
+      } else if (userRole === 'ADMIN') {
+        return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+      }
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+  }
+
+  // 2. Home page (/) - ALWAYS PUBLIC
+  if (pathname === '/') {
+    return NextResponse.next();
+  }
+
+  // 3. If user is not authenticated (no valid token) and trying to access protected route
+  if (!isValidToken) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
-  
-  // If user is authenticated and trying to access auth pages
-  if (token && (pathname === '/login' || pathname === '/register')) {
-    const userRole = getUserRoleFromToken(token);
-    console.log('[Middleware] User role:', userRole);
-    console.log('[Middleware] Authenticated user accessing auth page - redirecting');
-    
-    // Redirect based on role
-    if (userRole === 'PATIENT') {
-      console.log('[Middleware] Redirecting PATIENT to /');
-      return NextResponse.redirect(new URL('/', request.url));
-    } else if (userRole === 'BRANCH_MANAGER') {
-      return NextResponse.redirect(new URL('/branch-manager/dashboard', request.url));
-    } else if (userRole === 'ADMIN') {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-    }
-    
-    // Fallback to home if role not recognized
-    console.log('[Middleware] Role not recognized, redirecting to /');
+
+  // 4. If user is authenticated, check role-based access
+  // Admin routes - only ADMIN allowed
+  if (isAdminRoute && userRole !== 'ADMIN') {
     return NextResponse.redirect(new URL('/', request.url));
   }
-  
-  console.log('[Middleware] ALLOWING request to proceed');
-  console.log('='.repeat(50));
-  
+
+  // Branch Manager routes - only BRANCH_MANAGER allowed
+  if (isBranchManagerRoute && userRole !== 'BRANCH_MANAGER') {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
   return NextResponse.next();
 }
 

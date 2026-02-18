@@ -28,15 +28,54 @@ export default function AdminDashboardPage() {
     totalAppointmentsToday: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
       setIsLoading(true);
+      setError(null);
+      
       try {
+        console.log('[Dashboard] Fetching stats...');
         const response = await analyticsApi.getAdminStats();
-        setStats(response.data);
-      } catch (error) {
-        console.error("Failed to fetch stats:", error);
+        console.log('[Dashboard] API Response:', response);
+        console.log('[Dashboard] Response data:', response.data);
+        
+        // Handle different response structures
+        let data: any = response.data;
+        
+        // If data is wrapped in a data property (common NestJS pattern)
+        if (data && typeof data === 'object' && 'data' in data) {
+          data = (data as any).data;
+        }
+        
+        console.log('[Dashboard] Processed data:', data);
+        
+        if (data && typeof data === 'object') {
+          setStats({
+            totalBranches: data.totalBranches ?? 0,
+            totalDoctors: data.totalDoctors ?? 0,
+            totalPatients: data.totalPatients ?? 0,
+            totalAppointmentsToday: data.totalAppointmentsToday ?? 0,
+          });
+          console.log('[Dashboard] Stats set successfully');
+        } else {
+          console.error('[Dashboard] Invalid data format:', data);
+          setError('Invalid data format received');
+        }
+      } catch (err: any) {
+        console.error('[Dashboard] Error fetching stats:', err);
+        console.error('[Dashboard] Error response:', err.response);
+        console.error('[Dashboard] Error status:', err.response?.status);
+        console.error('[Dashboard] Error data:', err.response?.data);
+        
+        if (err.response?.status === 401) {
+          setError('Unauthorized - Please login as admin');
+        } else if (err.response?.status === 403) {
+          setError('Forbidden - Admin access required');
+        } else {
+          setError(err.response?.data?.message || 'Failed to fetch stats');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -68,6 +107,15 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <p className="font-medium">Error loading dashboard</p>
+          <p className="text-sm">{error}</p>
+          <p className="text-xs mt-1">Check browser console for details</p>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <StatsGrid>
         <StatCard
@@ -90,7 +138,6 @@ export default function AdminDashboardPage() {
           description="Registered patients"
           icon={Users}
           isLoading={isLoading}
-          trend={{ value: 12, isPositive: true }}
         />
         <StatCard
           title="Today's Appointments"

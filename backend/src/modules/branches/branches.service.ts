@@ -2,12 +2,15 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
+import { UserRole } from '../../shared/enums';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class BranchesService {
   constructor(private prisma: PrismaService) {}
 
   async create(createBranchDto: CreateBranchDto) {
+    // Check if branch name already exists
     const existingBranch = await this.prisma.branch.findFirst({
       where: {
         name: createBranchDto.name,
@@ -19,26 +22,81 @@ export class BranchesService {
       throw new ConflictException('Branch with this name already exists');
     }
 
-    const branch = await this.prisma.branch.create({
-      data: {
-        name: createBranchDto.name,
-        address: createBranchDto.address,
-        phone: createBranchDto.phone,
-        email: createBranchDto.email,
-        isActive: createBranchDto.isActive ?? true,
-      },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        email: true,
-        isActive: true,
-        createdAt: true,
-      },
+    // If manager is provided, check if email already exists
+    if (createBranchDto.manager) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: createBranchDto.manager.email },
+      });
+
+      if (existingUser) {
+        throw new ConflictException('Manager email already exists');
+      }
+    }
+
+    // Use transaction to create branch and manager together
+    const result = await this.prisma.$transaction(async (prisma) => {
+      // 1. Create the branch
+      const branch = await prisma.branch.create({
+        data: {
+          name: createBranchDto.name,
+          address: createBranchDto.address,
+          phone: createBranchDto.phone,
+          email: createBranchDto.email,
+          isActive: createBranchDto.isActive ?? true,
+        },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+
+      let manager = null;
+
+      // 2. Create manager if provided
+      if (createBranchDto.manager) {
+        // Hash password
+        const hashedPassword = await bcrypt.hash(createBranchDto.manager.password, 10);
+
+        // Create user with BRANCH_MANAGER role
+        const user = await prisma.user.create({
+          data: {
+            email: createBranchDto.manager.email,
+            password: hashedPassword,
+            firstName: createBranchDto.manager.firstName,
+            lastName: createBranchDto.manager.lastName,
+            phone: createBranchDto.manager.phone,
+            role: UserRole.BRANCH_MANAGER,
+          },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            role: true,
+          },
+        });
+
+        // Create BranchManager record linking user to branch
+        await prisma.branchManager.create({
+          data: {
+            userId: user.id,
+            branchId: branch.id,
+          },
+        });
+
+        manager = user;
+      }
+
+      return { branch, manager };
     });
 
-    return branch;
+    return result;
   }
 
   async findAll(query: { search?: string; status?: string; page?: number; limit?: number }) {
