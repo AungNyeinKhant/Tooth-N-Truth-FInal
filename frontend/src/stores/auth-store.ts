@@ -53,7 +53,11 @@ export const useAuthStore = create<AuthStore>()(
           localStorage.setItem("accessToken", accessToken);
 
           // Also set cookie for middleware SSR authentication
-          document.cookie = `accessToken=${accessToken}; path=/; max-age=86400; SameSite=Lax`;
+          // Note: accessToken cookie is NOT HttpOnly (needed for middleware)
+          // refreshToken cookie IS HttpOnly (set by backend, secure from XSS)
+          // max-age=900 (15 min) matches JWT_ACCESS_EXPIRATION
+          const isProduction = window.location.protocol === 'https:';
+          document.cookie = `accessToken=${accessToken}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
 
           set({
             user,
@@ -88,7 +92,11 @@ export const useAuthStore = create<AuthStore>()(
           localStorage.setItem("accessToken", accessToken);
 
           // Also set cookie for middleware SSR authentication
-          document.cookie = `accessToken=${accessToken}; path=/; max-age=86400; SameSite=Lax`;
+          // Note: accessToken cookie is NOT HttpOnly (needed for middleware)
+          // refreshToken cookie IS HttpOnly (set by backend, secure from XSS)
+          // max-age=900 (15 min) matches JWT_ACCESS_EXPIRATION
+          const isProduction = window.location.protocol === 'https:';
+          document.cookie = `accessToken=${accessToken}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
 
           set({
             user,
@@ -148,7 +156,9 @@ export const useAuthStore = create<AuthStore>()(
           console.log("[AuthStore] checkAuth - success:", response.data.data);
 
           // Ensure cookie is set for SSR
-          document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Lax`;
+          // max-age=900 (15 min) matches JWT_ACCESS_EXPIRATION
+          const isProduction = window.location.protocol === 'https:';
+          document.cookie = `accessToken=${token}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
 
           set({
             user: response.data.data,

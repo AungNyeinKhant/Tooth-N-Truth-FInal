@@ -54,7 +54,13 @@ apiClient.interceptors.response.use(
         console.log('[Axios] Token refresh successful');
         const { accessToken } = response.data.data;
         
+        // Store new token in localStorage
         localStorage.setItem('accessToken', accessToken);
+        
+        // Also update the cookie for middleware SSR authentication
+        // max-age=900 (15 min) matches JWT_ACCESS_EXPIRATION
+        const isProduction = window.location.protocol === 'https:';
+        document.cookie = `accessToken=${accessToken}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
         
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);

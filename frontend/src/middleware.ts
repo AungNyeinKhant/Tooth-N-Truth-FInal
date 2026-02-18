@@ -21,11 +21,11 @@ function getUserRoleFromToken(token: string): string | null {
   }
 }
 
-// Helper to check if token is expired
-function isTokenExpired(token: string): boolean {
+// Helper to check if token has valid structure (not expired check - that's handled by API)
+function isTokenValid(token: string): boolean {
   try {
     const base64Url = token.split('.')[1];
-    if (!base64Url) return true;
+    if (!base64Url) return false;
     
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
@@ -36,13 +36,11 @@ function isTokenExpired(token: string): boolean {
     );
     const payload = JSON.parse(jsonPayload);
     
-    // Check if token is expired
-    if (payload.exp && Date.now() >= payload.exp * 1000) {
-      return true;
-    }
-    return false;
+    // Just check if it has required fields - don't check expiration here
+    // Token refresh is handled by axios interceptor on API calls
+    return !!(payload.sub && payload.role);
   } catch (e) {
-    return true;
+    return false;
   }
 }
 
@@ -52,11 +50,11 @@ export function middleware(request: NextRequest) {
   // Get token from cookie
   const token = request.cookies.get('accessToken')?.value;
   
-  // Validate token - check if it exists AND is not expired AND has valid role
+  // Validate token structure (not expiration - that's handled by API refresh)
   let userRole: string | null = null;
   let isValidToken = false;
   
-  if (token && !isTokenExpired(token)) {
+  if (token && isTokenValid(token)) {
     userRole = getUserRoleFromToken(token);
     if (userRole) {
       isValidToken = true;
