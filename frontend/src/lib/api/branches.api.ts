@@ -19,12 +19,21 @@ export interface CreateBranchData {
   manager?: CreateManagerData;
 }
 
+export interface UpdateManagerData {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+}
+
 export interface UpdateBranchData {
   name?: string;
   address?: string;
   phone?: string;
   email?: string;
   isActive?: boolean;
+  manager?: UpdateManagerData;
 }
 
 export const branchesApi = {

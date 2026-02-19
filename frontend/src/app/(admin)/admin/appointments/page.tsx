@@ -113,15 +113,15 @@ export default function AdminAppointmentsPage() {
           doctorsApi.getAll(),
         ]);
         
-        let branchesData = branchesRes.data;
+        let branchesData: any = branchesRes.data;
         if (branchesData && typeof branchesData === 'object' && 'data' in branchesData && !Array.isArray(branchesData)) {
-          branchesData = branchesData.data;
+          branchesData = (branchesData as any).data;
         }
         setBranches(Array.isArray(branchesData) ? branchesData : []);
         
-        let doctorsData = doctorsRes.data;
+        let doctorsData: any = doctorsRes.data;
         if (doctorsData && typeof doctorsData === 'object' && 'data' in doctorsData && !Array.isArray(doctorsData)) {
-          doctorsData = doctorsData.data;
+          doctorsData = (doctorsData as any).data;
         }
         setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
       } catch (err) {

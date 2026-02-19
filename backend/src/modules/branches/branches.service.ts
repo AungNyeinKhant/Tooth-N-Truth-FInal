@@ -172,14 +172,30 @@ export class BranchesService {
 
   async findOne(id: string) {
     const branch = await this.prisma.branch.findFirst({
-      where: { id, isActive: true },
+      where: { id },
       select: {
         id: true,
         name: true,
         address: true,
         phone: true,
         email: true,
+        isActive: true,
         createdAt: true,
+        updatedAt: true,
+        managers: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
         doctors: {
           where: { isActive: true },
           select: {
@@ -265,6 +281,13 @@ export class BranchesService {
   async update(id: string, updateBranchDto: UpdateBranchDto) {
     const branch = await this.prisma.branch.findUnique({
       where: { id },
+      include: {
+        managers: {
+          include: {
+            user: true,
+          },
+        },
+      },
     });
 
     if (!branch) {
@@ -286,28 +309,88 @@ export class BranchesService {
       }
     }
 
-    const updatedBranch = await this.prisma.branch.update({
-      where: { id },
-      data: {
-        name: updateBranchDto.name,
-        address: updateBranchDto.address,
-        phone: updateBranchDto.phone,
-        email: updateBranchDto.email,
-        isActive: updateBranchDto.isActive,
-      },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        email: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    // Use transaction for branch and manager updates
+    const result = await this.prisma.$transaction(async (prisma) => {
+      // Update branch
+      const updatedBranch = await prisma.branch.update({
+        where: { id },
+        data: {
+          name: updateBranchDto.name,
+          address: updateBranchDto.address,
+          phone: updateBranchDto.phone,
+          email: updateBranchDto.email,
+          isActive: updateBranchDto.isActive,
+        },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      let manager = null;
+
+      // Update manager if provided and branch has a manager
+      if (updateBranchDto.manager && branch.managers.length > 0) {
+        const branchManager = branch.managers[0];
+        const currentManager = branchManager.user;
+
+        // Check for email conflict if email is being changed
+        if (updateBranchDto.manager.email && updateBranchDto.manager.email !== currentManager.email) {
+          const existingUser = await prisma.user.findUnique({
+            where: { email: updateBranchDto.manager.email },
+          });
+
+          if (existingUser) {
+            throw new ConflictException('Manager email already exists');
+          }
+        }
+
+        // Prepare update data
+        const managerUpdateData: any = {};
+        if (updateBranchDto.manager.firstName !== undefined) {
+          managerUpdateData.firstName = updateBranchDto.manager.firstName;
+        }
+        if (updateBranchDto.manager.lastName !== undefined) {
+          managerUpdateData.lastName = updateBranchDto.manager.lastName;
+        }
+        if (updateBranchDto.manager.email !== undefined) {
+          managerUpdateData.email = updateBranchDto.manager.email;
+        }
+        if (updateBranchDto.manager.phone !== undefined) {
+          managerUpdateData.phone = updateBranchDto.manager.phone;
+        }
+        // Only update password if provided
+        if (updateBranchDto.manager.password) {
+          managerUpdateData.password = await bcrypt.hash(updateBranchDto.manager.password, 10);
+        }
+
+        // Update manager user
+        const updatedManager = await prisma.user.update({
+          where: { id: currentManager.id },
+          data: managerUpdateData,
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            role: true,
+          },
+        });
+
+        manager = updatedManager;
+      }
+
+      return { branch: updatedBranch, manager };
     });
 
-    return updatedBranch;
+    return result;
   }
 
   async remove(id: string) {

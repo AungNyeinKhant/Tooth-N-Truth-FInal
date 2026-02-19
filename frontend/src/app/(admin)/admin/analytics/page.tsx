@@ -48,9 +48,9 @@ export default function AdminAnalyticsPage() {
       try {
         // Fetch admin stats
         const statsRes = await analyticsApi.getAdminStats();
-        let data = statsRes.data;
+        let data: any = statsRes.data;
         if (data && typeof data === 'object' && 'data' in data) {
-          data = data.data;
+          data = (data as any).data;
         }
         setStats({
           totalBranches: data.totalBranches ?? 0,
@@ -61,9 +61,9 @@ export default function AdminAnalyticsPage() {
 
         // Fetch branch details for per-branch stats
         const branchesRes = await branchesApi.getAll({ status: 'active' });
-        let branchesData = branchesRes.data;
+        let branchesData: any = branchesRes.data;
         if (branchesData && typeof branchesData === 'object' && 'data' in branchesData && !Array.isArray(branchesData)) {
-          branchesData = branchesData.data;
+          branchesData = (branchesData as any).data;
         }
         
         if (Array.isArray(branchesData)) {

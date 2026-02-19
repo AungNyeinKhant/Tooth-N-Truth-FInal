@@ -3,3 +3,4 @@ export * from './branches.api';
 export * from './services.api';
 export * from './doctors.api';
 export * from './appointments.api';
+export * from './analytics.api';

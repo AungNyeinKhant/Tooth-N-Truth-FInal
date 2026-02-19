@@ -47,18 +47,18 @@ function isTokenValid(token: string): boolean {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Get token from cookie
-  const token = request.cookies.get('accessToken')?.value;
+  const accessToken = request.cookies.get('accessToken')?.value;
+  const refreshToken = request.cookies.get('refreshToken')?.value;
   
-  // Validate token structure (not expiration - that's handled by API refresh)
   let userRole: string | null = null;
-  let isValidToken = false;
+  let isAuthenticated = false;
   
-  if (token && isTokenValid(token)) {
-    userRole = getUserRoleFromToken(token);
-    if (userRole) {
-      isValidToken = true;
-    }
+  if (accessToken && isTokenValid(accessToken)) {
+    userRole = getUserRoleFromToken(accessToken);
+    isAuthenticated = !!userRole;
+  } else if (refreshToken) {
+    userRole = getUserRoleFromToken(refreshToken);
+    isAuthenticated = !!userRole;
   }
 
   // Define route types
@@ -68,7 +68,7 @@ export function middleware(request: NextRequest) {
 
   // 1. Auth pages (/login, /register) - ALWAYS PUBLIC
   if (isAuthPage) {
-    if (!isValidToken) {
+    if (!isAuthenticated) {
       // Anonymous or invalid token - ALLOW access to login/register
       return NextResponse.next();
     } else {
@@ -90,7 +90,7 @@ export function middleware(request: NextRequest) {
   }
 
   // 3. If user is not authenticated (no valid token) and trying to access protected route
-  if (!isValidToken) {
+  if (!isAuthenticated) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
