@@ -390,9 +390,7 @@ export class AppointmentsService {
         endTime: {
           gte: startTime,
         },
-        status: {
-          in: ['PENDING', 'CONFIRMED'],
-        },
+        status: 'CONFIRMED',
       },
     });
 
@@ -411,7 +409,7 @@ export class AppointmentsService {
         startTime,
         endTime,
         notes,
-        status: 'PENDING',
+        status: 'CONFIRMED',
       },
       include: {
         doctor: {

@@ -396,18 +396,53 @@ export class BranchesService {
   async remove(id: string) {
     const branch = await this.prisma.branch.findUnique({
       where: { id },
+      include: {
+        managers: {
+          include: {
+            user: true,
+          },
+        },
+        appointments: {
+          select: { id: true },
+          take: 1, // Just need to know if any exist
+        },
+      },
     });
 
     if (!branch) {
       throw new NotFoundException('Branch not found');
     }
 
-    // Soft delete - set isActive to false
-    await this.prisma.branch.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    // Check for ANY appointments in this branch
+    if (branch.appointments.length > 0) {
+      throw new ConflictException(
+        'Cannot delete branch with appointments. Remove all appointments first.',
+      );
+    }
 
-    return { message: 'Branch deactivated successfully' };
+    // Use transaction to hard delete branch and manager together
+    return this.prisma.$transaction(async (prisma) => {
+      // 1. Hard delete manager (if exists) - must delete before branch due to foreign key
+      if (branch.managers.length > 0) {
+        const branchManager = branch.managers[0];
+
+        // Delete BranchManager record first (due to foreign key constraint)
+        await prisma.branchManager.delete({
+          where: { id: branchManager.id },
+        });
+
+        // Hard delete the User account
+        await prisma.user.delete({
+          where: { id: branchManager.userId },
+        });
+      }
+
+      // 2. Hard delete branch (completely remove from database)
+      await prisma.branch.delete({
+        where: { id },
+      });
+
+      return { message: 'Branch and manager deleted successfully' };
+    });
   }
 }

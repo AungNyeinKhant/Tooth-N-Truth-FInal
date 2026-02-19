@@ -128,9 +128,7 @@ export class DoctorsService {
           gte: startOfDay,
           lte: endOfDay,
         },
-        status: {
-          in: ['PENDING', 'CONFIRMED'],
-        },
+        status: 'CONFIRMED',
       },
       select: {
         startTime: true,

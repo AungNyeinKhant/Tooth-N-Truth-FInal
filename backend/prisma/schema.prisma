@@ -14,7 +14,6 @@ enum UserRole {
 }
 
 enum AppointmentStatus {
-  PENDING
   CONFIRMED
   CANCELLED
   COMPLETED
@@ -178,7 +177,7 @@ model Appointment {
   appointmentDate DateTime
   startTime     String            
   endTime       String            
-  status        AppointmentStatus @default(PENDING)
+  status        AppointmentStatus @default(CONFIRMED)
   notes         String?           @db.Text
   cancelReason  String?
   reminderSent  Boolean           @default(false)

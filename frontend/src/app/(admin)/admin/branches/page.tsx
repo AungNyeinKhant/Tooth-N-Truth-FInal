@@ -7,6 +7,7 @@ import { branchesApi } from "@/lib/api/branches.api";
 import { useUIStore } from "@/stores";
 import { Branch, BranchQuery, PaginationMeta } from "@/types";
 import { Button, Input, Badge } from "@/components/ui";
+import { DeleteBranchModal } from "./components/delete-branch-modal";
 import {
   Building2,
   Search,
@@ -21,7 +22,7 @@ import {
 export default function BranchesPage() {
   const router = useRouter();
   const { addToast } = useUIStore();
-  
+
   const [branches, setBranches] = useState<Branch[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({
     total: 0,
@@ -33,6 +34,10 @@ export default function BranchesPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+
+  // Delete modal state
+  const [branchToDelete, setBranchToDelete] = useState<Branch | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const fetchBranches = useCallback(async () => {
     console.log('[Branches] Starting fetch...');
@@ -149,18 +154,27 @@ export default function BranchesPage() {
     fetchBranches();
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
-      return;
-    }
+  const openDeleteModal = (branch: Branch) => {
+    setBranchToDelete(branch);
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setBranchToDelete(null);
+  };
+
+  const handleDelete = async () => {
+    if (!branchToDelete) return;
 
     try {
-      await branchesApi.delete(id);
-      addToast("Branch deleted successfully", "success");
+      await branchesApi.delete(branchToDelete.id);
+      addToast("Branch and manager deleted successfully", "success");
       fetchBranches();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete branch:", error);
-      addToast("Failed to delete branch", "error");
+      // Error is handled in the modal component
+      throw error;
     }
   };
 
@@ -351,7 +365,7 @@ export default function BranchesPage() {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(branch.id, branch.name)}
+                          onClick={() => openDeleteModal(branch)}
                           className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                           title="Delete"
                         >
@@ -395,6 +409,14 @@ export default function BranchesPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Branch Modal */}
+      <DeleteBranchModal
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        branch={branchToDelete}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
