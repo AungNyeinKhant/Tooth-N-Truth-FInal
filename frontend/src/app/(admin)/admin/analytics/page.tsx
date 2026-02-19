@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { analyticsApi, branchesApi, doctorsApi } from "@/lib/api";
 import { Card } from "@/components/ui";
+import { unwrapApiResponse, getErrorMessage } from "@/lib/utils";
 import {
   Building2,
   Stethoscope,
@@ -29,6 +30,11 @@ interface BranchStats {
   appointmentCount: number;
 }
 
+interface BranchData {
+  id: string;
+  name: string;
+}
+
 export default function AdminAnalyticsPage() {
   const [stats, setStats] = useState<DashboardStats>({
     totalBranches: 0,
@@ -48,10 +54,7 @@ export default function AdminAnalyticsPage() {
       try {
         // Fetch admin stats
         const statsRes = await analyticsApi.getAdminStats();
-        let data: any = statsRes.data;
-        if (data && typeof data === 'object' && 'data' in data) {
-          data = (data as any).data;
-        }
+        const data = unwrapApiResponse<DashboardStats>(statsRes.data);
         setStats({
           totalBranches: data.totalBranches ?? 0,
           totalDoctors: data.totalDoctors ?? 0,
@@ -61,13 +64,10 @@ export default function AdminAnalyticsPage() {
 
         // Fetch branch details for per-branch stats
         const branchesRes = await branchesApi.getAll({ status: 'active' });
-        let branchesData: any = branchesRes.data;
-        if (branchesData && typeof branchesData === 'object' && 'data' in branchesData && !Array.isArray(branchesData)) {
-          branchesData = (branchesData as any).data;
-        }
+        const branchesData = unwrapApiResponse<BranchData[]>(branchesRes.data);
         
         if (Array.isArray(branchesData)) {
-          const branchStatsData = branchesData.map((branch: any) => ({
+          const branchStatsData: BranchStats[] = branchesData.map((branch) => ({
             id: branch.id,
             name: branch.name,
             doctorCount: 0, // Will be populated later
@@ -75,9 +75,9 @@ export default function AdminAnalyticsPage() {
           }));
           setBranchStats(branchStatsData);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to fetch analytics:', err);
-        setError(err.response?.data?.message || 'Failed to load analytics');
+        setError(getErrorMessage(err));
       } finally {
         setIsLoading(false);
       }

@@ -4,6 +4,7 @@ import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
 import { UserRole } from '../../shared/enums';
 import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class BranchesService {
@@ -352,7 +353,7 @@ export class BranchesService {
         }
 
         // Prepare update data
-        const managerUpdateData: any = {};
+        const managerUpdateData: Prisma.UserUpdateInput = {};
         if (updateBranchDto.manager.firstName !== undefined) {
           managerUpdateData.firstName = updateBranchDto.manager.firstName;
         }

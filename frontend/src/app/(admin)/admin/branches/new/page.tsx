@@ -9,6 +9,7 @@ import { branchesApi, CreateBranchData } from "@/lib/api/branches.api";
 import { useUIStore } from "@/stores";
 import { Button, Input, Textarea } from "@/components/ui";
 import { Building2, ArrowLeft, Loader2, UserPlus } from "lucide-react";
+import { getErrorMessage } from "@/lib/utils";
 
 // Manager schema
 const managerSchema = z.object({
@@ -104,92 +105,90 @@ export default function CreateBranchPage() {
       const successMessage = "Branch and manager created successfully!";
       addToast(successMessage, "success");
       router.push("/admin/branches");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to create branch:", error);
-      const errorMessage =
-        error.response?.data?.message || "Failed to create branch";
-      addToast(errorMessage, "error");
+      addToast(getErrorMessage(error), "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className='max-w-3xl mx-auto'>
+    <div className="max-w-3xl mx-auto">
       {/* Header */}
-      <div className='mb-6'>
+      <div className="mb-6">
         <a
-          href='/admin/branches'
-          className='inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4'
+          href="/admin/branches"
+          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
         >
-          <ArrowLeft className='w-4 h-4' />
+          <ArrowLeft className="w-4 h-4" />
           Back to Branches
         </a>
-        <h1 className='text-2xl font-bold text-gray-900'>Create New Branch</h1>
-        <p className='text-sm text-gray-500'>
+        <h1 className="text-2xl font-bold text-gray-900">Create New Branch</h1>
+        <p className="text-sm text-gray-500">
           Add a new clinic location to the system
         </p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className='space-y-6'>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Branch Information Section */}
-        <div className='bg-white rounded-xl shadow-sm border border-gray-100 p-6'>
-          <h2 className='text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2'>
-            <Building2 className='w-5 h-5 text-teal-600' />
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-teal-600" />
             Branch Information
           </h2>
 
-          <div className='space-y-5'>
+          <div className="space-y-5">
             {/* Branch Name */}
             <div>
               <Input
-                id='name'
-                type='text'
-                label='Branch Name *'
-                placeholder='e.g., Downtown Dental Clinic'
+                id="name"
+                type="text"
+                label="Branch Name *"
+                placeholder="e.g., Downtown Dental Clinic"
                 {...register("name")}
                 error={errors.name?.message}
-                className='w-full'
+                className="w-full"
               />
             </div>
 
             {/* Address */}
             <div>
               <Textarea
-                id='address'
-                label='Address *'
-                placeholder='e.g., 123 Main Street, Downtown, Yangon'
+                id="address"
+                label="Address *"
+                placeholder="e.g., 123 Main Street, Downtown, Yangon"
                 {...register("address")}
                 error={errors.address?.message}
-                className='w-full min-h-[100px]'
+                className="w-full min-h-[100px]"
               />
             </div>
 
             {/* Phone & Email Row */}
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Input
-                  id='phone'
-                  type='tel'
-                  label='Phone Number *'
-                  placeholder='e.g., +95 1 234 5678'
+                  id="phone"
+                  type="tel"
+                  label="Phone Number *"
+                  placeholder="e.g., +95 1 234 5678"
                   {...register("phone")}
                   error={errors.phone?.message}
-                  className='w-full'
+                  className="w-full"
                 />
               </div>
               <div>
                 <Input
-                  id='email'
-                  type='email'
-                  label='Email Address'
-                  placeholder='e.g., downtown@toothandtruth.com'
+                  id="email"
+                  type="email"
+                  label="Email Address"
+                  placeholder="e.g., downtown@toothandtruth.com"
                   {...register("email")}
                   error={errors.email?.message}
-                  className='w-full'
+                  className="w-full"
                 />
-                <p className='mt-1 text-xs text-gray-500'>
+                <p className="mt-1 text-xs text-gray-500">
                   Optional - for patient contact
                 </p>
               </div>
@@ -197,115 +196,115 @@ export default function CreateBranchPage() {
           </div>
         </div>
 
-        <div className='bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden'>
-          <div className='px-6 py-4 flex items-center justify-between bg-teal-50 border-b border-teal-100'>
-            <div className='flex items-center gap-3'>
-              <UserPlus className='w-5 h-5 text-teal-600' />
-              <div className='text-left'>
-                <span className='font-medium text-teal-900'>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 flex items-center justify-between bg-teal-50 border-b border-teal-100">
+            <div className="flex items-center gap-3">
+              <UserPlus className="w-5 h-5 text-teal-600" />
+              <div className="text-left">
+                <span className="font-medium text-teal-900">
                   Manager Information
                 </span>
-                <p className='text-xs text-gray-500'>
+                <p className="text-xs text-gray-500">
                   Provide branch manager credentials (required)
                 </p>
               </div>
             </div>
           </div>
 
-          <div className='p-6 space-y-5 bg-teal-50/50'>
-            <div className='p-3 bg-teal-100 rounded-lg text-sm text-teal-800'>
+          <div className="p-6 space-y-5 bg-teal-50/50">
+            <div className="p-3 bg-teal-100 rounded-lg text-sm text-teal-800">
               <strong>Note:</strong> The manager will use their email and
               password to log in to the system.
             </div>
 
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Input
-                  id='manager.firstName'
-                  type='text'
-                  label='First Name *'
-                  placeholder='e.g., John'
+                  id="manager.firstName"
+                  type="text"
+                  label="First Name *"
+                  placeholder="e.g., John"
                   {...register("manager.firstName")}
                   error={errors.manager?.firstName?.message}
-                  className='w-full'
+                  className="w-full"
                 />
               </div>
               <div>
                 <Input
-                  id='manager.lastName'
-                  type='text'
-                  label='Last Name *'
-                  placeholder='e.g., Doe'
+                  id="manager.lastName"
+                  type="text"
+                  label="Last Name *"
+                  placeholder="e.g., Doe"
                   {...register("manager.lastName")}
                   error={errors.manager?.lastName?.message}
-                  className='w-full'
+                  className="w-full"
                 />
               </div>
             </div>
 
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Input
-                  id='manager.email'
-                  type='email'
-                  label='Email Address *'
-                  placeholder='e.g., john.doe@toothandtruth.com'
+                  id="manager.email"
+                  type="email"
+                  label="Email Address *"
+                  placeholder="e.g., john.doe@toothandtruth.com"
                   {...register("manager.email")}
                   error={errors.manager?.email?.message}
-                  className='w-full'
+                  className="w-full"
                 />
-                <p className='mt-1 text-xs text-gray-500'>Used for login</p>
+                <p className="mt-1 text-xs text-gray-500">Used for login</p>
               </div>
               <div>
                 <Input
-                  id='manager.phone'
-                  type='tel'
-                  label='Phone Number *'
-                  placeholder='e.g., +95 9 123 456 789'
+                  id="manager.phone"
+                  type="tel"
+                  label="Phone Number *"
+                  placeholder="e.g., +95 9 123 456 789"
                   {...register("manager.phone")}
                   error={errors.manager?.phone?.message}
-                  className='w-full'
+                  className="w-full"
                 />
               </div>
             </div>
 
-            <div className='max-w-md'>
+            <div className="max-w-md">
               <Input
-                id='manager.password'
-                type='password'
-                label='Password *'
-                placeholder='Min 8 characters'
+                id="manager.password"
+                type="password"
+                label="Password *"
+                placeholder="Min 8 characters"
                 {...register("manager.password")}
                 error={errors.manager?.password?.message}
-                className='w-full'
+                className="w-full"
               />
-              <p className='mt-1 text-xs text-gray-500'>Minimum 8 characters</p>
+              <p className="mt-1 text-xs text-gray-500">Minimum 8 characters</p>
             </div>
           </div>
         </div>
 
         {/* Submit Button */}
-        <div className='bg-white rounded-xl shadow-sm border border-gray-100 p-6'>
-          <div className='flex items-center justify-end gap-4'>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-end gap-4">
             <a
-              href='/admin/branches'
-              className='px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors'
+              href="/admin/branches"
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
             >
               Cancel
             </a>
             <Button
-              type='submit'
+              type="submit"
               disabled={isSubmitting}
-              className='flex items-center gap-2'
+              className="flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className='w-4 h-4 animate-spin' />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Creating...
                 </>
               ) : (
                 <>
-                  <Building2 className='w-4 h-4' />
+                  <Building2 className="w-4 h-4" />
                   Create Branch & Manager
                 </>
               )}

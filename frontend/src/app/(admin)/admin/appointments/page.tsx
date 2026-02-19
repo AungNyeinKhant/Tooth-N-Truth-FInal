@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { branchesApi, appointmentsApi, doctorsApi } from "@/lib/api";
 import { useUIStore } from "@/stores";
 import { Button, Badge, Input } from "@/components/ui";
+import { unwrapApiResponse, getErrorMessage } from "@/lib/utils";
 import {
   Calendar,
   ChevronLeft,
@@ -18,7 +19,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 
-type AppointmentStatus = 'ALL' | 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+type AppointmentStatus = 'ALL' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
 interface Appointment {
   id: string;
@@ -61,9 +62,19 @@ interface PaginationMeta {
   totalPages: number;
 }
 
+interface BranchOption {
+  id: string;
+  name: string;
+}
+
+interface DoctorOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 const statusTabs: { value: AppointmentStatus; label: string }[] = [
   { value: 'ALL', label: 'All' },
-  { value: 'PENDING', label: 'Pending' },
   { value: 'CONFIRMED', label: 'Confirmed' },
   { value: 'COMPLETED', label: 'Completed' },
   { value: 'CANCELLED', label: 'Cancelled' },
@@ -71,7 +82,6 @@ const statusTabs: { value: AppointmentStatus; label: string }[] = [
 ];
 
 const statusColors: Record<string, "warning" | "success" | "info" | "error" | "secondary"> = {
-  PENDING: "warning",
   CONFIRMED: "info",
   COMPLETED: "success",
   CANCELLED: "error",
@@ -101,8 +111,8 @@ export default function AdminAppointmentsPage() {
   const [endDate, setEndDate] = useState<string>("");
   
   // Options
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
-  const [doctors, setDoctors] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
 
   // Load branches and doctors for filters
   useEffect(() => {
@@ -113,16 +123,10 @@ export default function AdminAppointmentsPage() {
           doctorsApi.getAll(),
         ]);
         
-        let branchesData: any = branchesRes.data;
-        if (branchesData && typeof branchesData === 'object' && 'data' in branchesData && !Array.isArray(branchesData)) {
-          branchesData = (branchesData as any).data;
-        }
+        const branchesData = unwrapApiResponse<BranchOption[]>(branchesRes.data);
         setBranches(Array.isArray(branchesData) ? branchesData : []);
         
-        let doctorsData: any = doctorsRes.data;
-        if (doctorsData && typeof doctorsData === 'object' && 'data' in doctorsData && !Array.isArray(doctorsData)) {
-          doctorsData = (doctorsData as any).data;
-        }
+        const doctorsData = unwrapApiResponse<DoctorOption[]>(doctorsRes.data);
         setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
       } catch (err) {
         console.error('Failed to load filter options:', err);

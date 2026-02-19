@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal, Button } from "@/components/ui";
 import { Building2, User, AlertTriangle, Loader2 } from "lucide-react";
 import { Branch } from "@/types";
+import { getErrorMessage } from "@/lib/utils";
 
 interface DeleteBranchModalProps {
   isOpen: boolean;
@@ -30,8 +31,8 @@ export function DeleteBranchModal({
     try {
       await onConfirm();
       onClose();
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || "Failed to delete branch";
+    } catch (err) {
+      const errorMessage = getErrorMessage(err);
       setError(errorMessage);
     } finally {
       setIsDeleting(false);
