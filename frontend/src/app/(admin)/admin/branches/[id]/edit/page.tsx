@@ -120,7 +120,8 @@ export default function EditBranchPage() {
       try {
         setIsLoading(true);
         const response = await branchesApi.getById(branchId);
-        const data = response.data as BranchWithManager;
+        const apiData = response.data as { data: BranchWithManager };
+        const data = apiData.data;
         setBranchData(data);
 
         // Get manager info if exists

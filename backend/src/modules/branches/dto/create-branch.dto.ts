@@ -85,12 +85,11 @@ export class CreateBranchDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional({
-    description: 'Branch manager information (optional - can be assigned later)',
+  @ApiProperty({
+    description: 'Branch manager information (required when creating a branch)',
     type: CreateManagerDto,
   })
-  @IsOptional()
   @ValidateNested()
   @Type(() => CreateManagerDto)
-  manager?: CreateManagerDto;
+  manager: CreateManagerDto;
 }
