@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { servicesApi, Service, ServiceQuery } from "@/lib/api/services.api";
@@ -43,6 +43,12 @@ export default function ServicesPage() {
     "all" | "active" | "inactive"
   >("all");
 
+  // Use refs to always get current values in fetchServices
+  const pageRef = useRef(1);
+  const limitRef = useRef(10);
+  const statusRef = useRef<"all" | "active" | "inactive">("all");
+  const searchRef = useRef("");
+
   const fetchServices = useCallback(async () => {
     console.log('[Services] Starting fetch...');
     setIsLoading(true);
@@ -50,13 +56,13 @@ export default function ServicesPage() {
     
     try {
       const query: ServiceQuery = {
-        page: meta.page,
-        limit: meta.limit,
-        status: statusFilter,
+        page: pageRef.current,
+        limit: limitRef.current,
+        status: statusRef.current,
       };
 
-      if (searchQuery.trim()) {
-        query.search = searchQuery.trim();
+      if (searchRef.current.trim()) {
+        query.search = searchRef.current.trim();
       }
 
       console.log('[Services] Query:', query);
@@ -145,41 +151,62 @@ export default function ServicesPage() {
       setIsLoading(false);
       console.log('[Services] Fetch complete');
     }
-  }, [meta.page, meta.limit, statusFilter, searchQuery, addToast, router]);
+  }, [addToast, router]);
 
+  // Initial fetch on mount
   useEffect(() => {
     fetchServices();
   }, [fetchServices]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    pageRef.current = 1;
+    searchRef.current = searchQuery;
     setMeta((prev) => ({ ...prev, page: 1 }));
     fetchServices();
   };
 
   const handleDelete = async (id: string, name: string) => {
+    console.log('[Services] Delete clicked for:', id, name);
+    
     if (!confirm(`Are you sure you want to delete "${name}"?`)) {
+      console.log('[Services] Delete cancelled by user');
       return;
     }
 
+    console.log('[Services] Proceeding with delete for:', id);
+    
     try {
-      await servicesApi.delete(id);
+      const response = await servicesApi.delete(id);
+      console.log('[Services] Delete response:', response);
       addToast("Service deleted successfully", "success");
+      // Refresh the list to show updated data
       fetchServices();
-    } catch (error) {
-      console.error("Failed to delete service:", error);
-      addToast(getErrorMessage(error), "error");
+    } catch (error: any) {
+      console.error("[Services] Delete failed:", error);
+      console.error("[Services] Error response:", error.response);
+      console.error("[Services] Error status:", error.response?.status);
+      console.error("[Services] Error data:", error.response?.data);
+      
+      // Handle 409 conflict errors with specific message
+      const errorMessage = error.response?.data?.message || getErrorMessage(error);
+      addToast(errorMessage, "error");
     }
   };
 
   const handleStatusChange = (status: "all" | "active" | "inactive") => {
+    statusRef.current = status;
+    pageRef.current = 1;
     setStatusFilter(status);
     setMeta((prev) => ({ ...prev, page: 1 }));
+    fetchServices();
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= meta.totalPages) {
+      pageRef.current = newPage;
       setMeta((prev) => ({ ...prev, page: newPage }));
+      fetchServices();
     }
   };
 

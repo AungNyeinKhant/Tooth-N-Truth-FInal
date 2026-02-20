@@ -199,6 +199,9 @@ export class ServicesService {
         appointments: {
           take: 1,
         },
+        branches: {
+          take: 1,
+        },
       },
     });
 
@@ -206,12 +209,25 @@ export class ServicesService {
       throw new NotFoundException('Service not found');
     }
 
-    // Soft delete - set isActive to false
-    await this.prisma.service.update({
+    // Check if any branches are using this service (active or inactive)
+    if (service.branches.length > 0) {
+      throw new ConflictException(
+        'Cannot delete service. Please remove branch associations first.',
+      );
+    }
+
+    // Check if there are any appointments using this service
+    if (service.appointments.length > 0) {
+      throw new ConflictException(
+        'Cannot delete service with existing appointments.',
+      );
+    }
+
+    // Hard delete - completely remove from database
+    await this.prisma.service.delete({
       where: { id },
-      data: { isActive: false },
     });
 
-    return { message: 'Service deactivated successfully' };
+    return { message: 'Service deleted successfully' };
   }
 }
