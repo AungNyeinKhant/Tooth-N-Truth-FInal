@@ -8,6 +8,28 @@ import { QueryServiceDto, ServiceStatus } from './dto/query-service.dto';
 export class ServicesService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Convert Prisma Decimal to number for API responses
+   */
+  private toNumber(value: any): number {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return value;
+    if (typeof value === 'object' && typeof value.toNumber === 'function') {
+      return value.toNumber();
+    }
+    return Number(value);
+  }
+
+  /**
+   * Transform service data to ensure price is a number
+   */
+  private transformService(service: any) {
+    return {
+      ...service,
+      price: this.toNumber(service.price),
+    };
+  }
+
   async findAll(query: QueryServiceDto) {
     const { search, status, page = 1, limit = 10 } = query;
     
@@ -46,8 +68,11 @@ export class ServicesService {
       this.prisma.service.count({ where }),
     ]);
 
+    // Transform services to convert Decimal price to number
+    const transformedServices = services.map(service => this.transformService(service));
+
     return {
-      data: services,
+      data: transformedServices,
       meta: {
         total,
         page,
@@ -76,7 +101,7 @@ export class ServicesService {
       throw new NotFoundException('Service not found');
     }
 
-    return service;
+    return this.transformService(service);
   }
 
   async create(createServiceDto: CreateServiceDto) {
@@ -114,7 +139,7 @@ export class ServicesService {
       },
     });
 
-    return service;
+    return this.transformService(service);
   }
 
   async update(id: string, updateServiceDto: UpdateServiceDto) {
@@ -164,7 +189,7 @@ export class ServicesService {
       },
     });
 
-    return updatedService;
+    return this.transformService(updatedService);
   }
 
   async remove(id: string) {
