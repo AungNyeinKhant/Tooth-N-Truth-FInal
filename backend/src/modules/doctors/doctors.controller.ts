@@ -1,9 +1,23 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DoctorsService } from './doctors.service';
-import { Roles, CurrentUser, Public } from '../../core/decorators';
+import { CreateDoctorDto, UpdateDoctorDto, QueryDoctorDto } from './dto';
+import { Public, Roles } from '../../core/decorators';
+import { RolesGuard } from '../../core/guards';
+import { JwtAuthGuard } from '../../core/guards';
 import { UserRole } from '../../shared/enums';
-import { CreateDoctorDto, UpdateDoctorDto } from './dto';
 
 @ApiTags('Doctors')
 @Controller('doctors')
@@ -12,16 +26,16 @@ export class DoctorsController {
 
   @Public()
   @Get()
-  @ApiOperation({ summary: 'Get all doctors' })
-  @ApiResponse({ status: 200, description: 'List of all doctors' })
-  async findAll(@Query('branchId') branchId?: string) {
-    return this.doctorsService.findAll(branchId);
+  @ApiOperation({ summary: 'Get all doctors with search, filter, pagination' })
+  @ApiResponse({ status: 200, description: 'List of doctors with pagination metadata' })
+  async findAll(@Query() query: QueryDoctorDto) {
+    return this.doctorsService.findAll(query);
   }
 
   @Public()
   @Get(':id')
-  @ApiOperation({ summary: 'Get doctor by ID' })
-  @ApiResponse({ status: 200, description: 'Doctor details' })
+  @ApiOperation({ summary: 'Get doctor by ID with schedules' })
+  @ApiResponse({ status: 200, description: 'Doctor details with schedules' })
   @ApiResponse({ status: 404, description: 'Doctor not found' })
   async findOne(@Param('id') id: string) {
     return this.doctorsService.findOne(id);
@@ -31,6 +45,7 @@ export class DoctorsController {
   @Get(':id/schedules')
   @ApiOperation({ summary: 'Get doctor schedules' })
   @ApiResponse({ status: 200, description: 'Doctor schedules' })
+  @ApiResponse({ status: 404, description: 'Doctor not found' })
   async getDoctorSchedules(@Param('id') id: string) {
     return this.doctorsService.getDoctorSchedules(id);
   }
@@ -48,48 +63,48 @@ export class DoctorsController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
-  @Roles(UserRole.BRANCH_MANAGER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Add new doctor' })
-  @ApiResponse({ status: 201, description: 'Doctor created' })
+  @ApiOperation({ summary: 'Create a new doctor (Admin only)' })
+  @ApiResponse({ status: 201, description: 'Doctor created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
-  async create(
-    @Body() createDoctorDto: CreateDoctorDto,
-    @CurrentUser('branchId') branchId: string,
-    @CurrentUser('role') role: UserRole,
-  ) {
-    return this.doctorsService.create(createDoctorDto, branchId, role);
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({ status: 404, description: 'Branch not found' })
+  @ApiResponse({ status: 409, description: 'Doctor with this email already exists' })
+  @HttpCode(HttpStatus.CREATED)
+  async create(@Body() createDoctorDto: CreateDoctorDto) {
+    return this.doctorsService.create(createDoctorDto);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
-  @Roles(UserRole.BRANCH_MANAGER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Update doctor' })
-  @ApiResponse({ status: 200, description: 'Doctor updated' })
+  @ApiOperation({ summary: 'Update a doctor (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Doctor updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({ status: 404, description: 'Doctor or Branch not found' })
+  @ApiResponse({ status: 409, description: 'Doctor with this email already exists' })
   async update(
     @Param('id') id: string,
     @Body() updateDoctorDto: UpdateDoctorDto,
-    @CurrentUser('branchId') branchId: string,
-    @CurrentUser('role') role: UserRole,
   ) {
-    return this.doctorsService.update(id, updateDoctorDto, branchId, role);
+    return this.doctorsService.update(id, updateDoctorDto);
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
-  @Roles(UserRole.BRANCH_MANAGER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Delete doctor (soft delete)' })
-  @ApiResponse({ status: 200, description: 'Doctor deactivated' })
+  @ApiOperation({ summary: 'Delete a doctor (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Doctor deleted successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser('branchId') branchId: string,
-    @CurrentUser('role') role: UserRole,
-  ) {
-    return this.doctorsService.remove(id, branchId, role);
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({ status: 404, description: 'Doctor not found' })
+  @ApiResponse({ status: 409, description: 'Cannot delete doctor with existing appointments' })
+  async remove(@Param('id') id: string) {
+    return this.doctorsService.remove(id);
   }
 }

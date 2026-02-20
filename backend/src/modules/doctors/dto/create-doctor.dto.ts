@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUUID, Length, IsEmail } from 'class-validator';
+import { IsString, IsOptional, IsUUID, Length, IsEmail, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateDoctorDto {
@@ -51,11 +51,18 @@ export class CreateDoctorDto {
   @Length(0, 1000)
   bio?: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     example: '123e4567-e89b-12d3-a456-426614174000',
-    description: 'Branch ID (required for admin, optional for branch manager)',
+    description: 'Branch ID where the doctor works',
+  })
+  @IsUUID()
+  branchId: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Whether the doctor is active (defaults to true)',
   })
   @IsOptional()
-  @IsUUID()
-  branchId?: string;
+  @IsBoolean()
+  isActive?: boolean;
 }

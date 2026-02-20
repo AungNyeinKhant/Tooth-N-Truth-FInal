@@ -1,41 +1,108 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { UserRole } from '../../shared/enums';
-import { CreateDoctorDto, UpdateDoctorDto } from './dto';
+import { CreateDoctorDto, UpdateDoctorDto, QueryDoctorDto, DoctorStatus } from './dto';
 
 @Injectable()
 export class DoctorsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(branchId?: string) {
-    const where = branchId ? { branchId, isActive: true } : { isActive: true };
+  /**
+   * Create default schedule for a new doctor (Mon-Fri, 9:00-17:00)
+   */
+  private async createDefaultSchedule(doctorId: string, branchId: string) {
+    const defaultSchedule = [];
+    // Monday = 1, Tuesday = 2, ..., Friday = 5
+    for (let dayOfWeek = 1; dayOfWeek <= 5; dayOfWeek++) {
+      defaultSchedule.push({
+        doctorId,
+        branchId,
+        dayOfWeek,
+        startTime: '09:00',
+        endTime: '17:00',
+        slotDuration: 30,
+        bufferTime: 10,
+        isActive: true,
+      });
+    }
+
+    await this.prisma.doctorSchedule.createMany({
+      data: defaultSchedule,
+    });
+  }
+
+  async findAll(query: QueryDoctorDto) {
+    const { search, status, branchId, specialization, page = 1, limit = 10 } = query;
     
-    const doctors = await this.prisma.doctor.findMany({
-      where,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        specialization: true,
-        phone: true,
-        email: true,
-        bio: true,
-        branchId: true,
-        branch: {
-          select: {
-            name: true,
+    const where: any = {};
+    
+    // Status filter
+    if (status && status !== DoctorStatus.ALL) {
+      where.isActive = status === DoctorStatus.ACTIVE;
+    }
+
+    // Branch filter
+    if (branchId) {
+      where.branchId = branchId;
+    }
+
+    // Specialization filter (case-insensitive)
+    if (specialization) {
+      where.specialization = {
+        contains: specialization,
+        mode: 'insensitive',
+      };
+    }
+
+    // Search by name (first or last name, case-insensitive)
+    if (search) {
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [doctors, total] = await Promise.all([
+      this.prisma.doctor.findMany({
+        where,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          specialization: true,
+          phone: true,
+          email: true,
+          bio: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-      orderBy: { lastName: 'asc' },
-    });
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.doctor.count({ where }),
+    ]);
 
-    return doctors;
+    return {
+      data: doctors,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(id: string) {
-    const doctor = await this.prisma.doctor.findFirst({
-      where: { id, isActive: true },
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id },
       select: {
         id: true,
         firstName: true,
@@ -44,13 +111,29 @@ export class DoctorsService {
         phone: true,
         email: true,
         bio: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
         branchId: true,
         branch: {
           select: {
             id: true,
             name: true,
             address: true,
+            phone: true,
           },
+        },
+        schedules: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            dayOfWeek: true,
+            startTime: true,
+            endTime: true,
+            slotDuration: true,
+            bufferTime: true,
+          },
+          orderBy: { dayOfWeek: 'asc' },
         },
       },
     });
@@ -63,6 +146,14 @@ export class DoctorsService {
   }
 
   async getDoctorSchedules(doctorId: string) {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id: doctorId },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
     const schedules = await this.prisma.doctorSchedule.findMany({
       where: {
         doctorId,
@@ -216,45 +307,87 @@ export class DoctorsService {
     return slots;
   }
 
-  async create(createDoctorDto: CreateDoctorDto, userBranchId: string, role: UserRole) {
-    const { branchId: dtoBranchId, ...doctorData } = createDoctorDto;
-    
-    // Determine which branch to use
-    let branchId: string;
-    
-    if (role === UserRole.ADMIN && dtoBranchId) {
-      branchId = dtoBranchId;
-    } else if (role === UserRole.BRANCH_MANAGER && userBranchId) {
-      branchId = userBranchId;
-    } else {
-      throw new ForbiddenException('Branch ID is required');
-    }
-
+  async create(createDoctorDto: CreateDoctorDto) {
     // Check if branch exists
     const branch = await this.prisma.branch.findFirst({
-      where: { id: branchId, isActive: true },
+      where: { id: createDoctorDto.branchId, isActive: true },
     });
 
     if (!branch) {
       throw new NotFoundException('Branch not found');
     }
 
-    const doctor = await this.prisma.doctor.create({
-      data: {
-        ...doctorData,
-        branchId,
-      },
+    // Check for duplicate email if provided
+    if (createDoctorDto.email) {
+      const existingDoctor = await this.prisma.doctor.findUnique({
+        where: { email: createDoctorDto.email },
+      });
+
+      if (existingDoctor) {
+        throw new ConflictException('Doctor with this email already exists');
+      }
+    }
+
+    // Create doctor and default schedule in transaction
+    const doctor = await this.prisma.$transaction(async (prisma) => {
+      const newDoctor = await prisma.doctor.create({
+        data: {
+          firstName: createDoctorDto.firstName,
+          lastName: createDoctorDto.lastName,
+          specialization: createDoctorDto.specialization,
+          phone: createDoctorDto.phone,
+          email: createDoctorDto.email,
+          bio: createDoctorDto.bio,
+          branchId: createDoctorDto.branchId,
+          isActive: createDoctorDto.isActive ?? true,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          specialization: true,
+          phone: true,
+          email: true,
+          bio: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+          branchId: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Create default schedule (Mon-Fri, 9-5)
+      const defaultSchedules = [];
+      for (let dayOfWeek = 1; dayOfWeek <= 5; dayOfWeek++) {
+        defaultSchedules.push({
+          doctorId: newDoctor.id,
+          branchId: createDoctorDto.branchId,
+          dayOfWeek,
+          startTime: '09:00',
+          endTime: '17:00',
+          slotDuration: 30,
+          bufferTime: 10,
+          isActive: true,
+        });
+      }
+
+      await prisma.doctorSchedule.createMany({
+        data: defaultSchedules,
+      });
+
+      return newDoctor;
     });
 
     return doctor;
   }
 
-  async update(
-    id: string,
-    updateDoctorDto: UpdateDoctorDto,
-    userBranchId: string,
-    role: UserRole,
-  ) {
+  async update(id: string, updateDoctorDto: UpdateDoctorDto) {
     const doctor = await this.prisma.doctor.findUnique({
       where: { id },
     });
@@ -263,39 +396,90 @@ export class DoctorsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Check permissions
-    if (role === UserRole.BRANCH_MANAGER && doctor.branchId !== userBranchId) {
-      throw new ForbiddenException('You can only update doctors in your branch');
+    // Check for duplicate email if email is being updated
+    if (updateDoctorDto.email && updateDoctorDto.email !== doctor.email) {
+      const existingDoctor = await this.prisma.doctor.findUnique({
+        where: { email: updateDoctorDto.email },
+      });
+
+      if (existingDoctor) {
+        throw new ConflictException('Doctor with this email already exists');
+      }
     }
 
-    const updated = await this.prisma.doctor.update({
+    // Check if new branch exists if branchId is being updated
+    if (updateDoctorDto.branchId && updateDoctorDto.branchId !== doctor.branchId) {
+      const branch = await this.prisma.branch.findFirst({
+        where: { id: updateDoctorDto.branchId, isActive: true },
+      });
+
+      if (!branch) {
+        throw new NotFoundException('Branch not found');
+      }
+    }
+
+    const updatedDoctor = await this.prisma.doctor.update({
       where: { id },
-      data: updateDoctorDto,
+      data: {
+        firstName: updateDoctorDto.firstName,
+        lastName: updateDoctorDto.lastName,
+        specialization: updateDoctorDto.specialization,
+        phone: updateDoctorDto.phone,
+        email: updateDoctorDto.email,
+        bio: updateDoctorDto.bio,
+        branchId: updateDoctorDto.branchId,
+        isActive: updateDoctorDto.isActive,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        bio: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        branchId: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
-    return updated;
+    return updatedDoctor;
   }
 
-  async remove(id: string, userBranchId: string, role: UserRole) {
+  async remove(id: string) {
     const doctor = await this.prisma.doctor.findUnique({
       where: { id },
+      include: {
+        appointments: {
+          take: 1,
+        },
+      },
     });
 
     if (!doctor) {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Check permissions
-    if (role === UserRole.BRANCH_MANAGER && doctor.branchId !== userBranchId) {
-      throw new ForbiddenException('You can only delete doctors in your branch');
+    // Check if doctor has any appointments
+    if (doctor.appointments.length > 0) {
+      throw new ConflictException(
+        'Cannot delete doctor with existing appointments.',
+      );
     }
 
-    // Soft delete
-    await this.prisma.doctor.update({
+    // Hard delete - doctor schedules will cascade delete
+    await this.prisma.doctor.delete({
       where: { id },
-      data: { isActive: false },
     });
 
-    return { message: 'Doctor deactivated successfully' };
+    return { message: 'Doctor deleted successfully' };
   }
 }
