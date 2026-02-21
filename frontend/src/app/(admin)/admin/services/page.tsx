@@ -50,7 +50,6 @@ export default function ServicesPage() {
   const searchRef = useRef("");
 
   const fetchServices = useCallback(async () => {
-    console.log('[Services] Starting fetch...');
     setIsLoading(true);
     setError(null);
     
@@ -65,74 +64,16 @@ export default function ServicesPage() {
         query.search = searchRef.current.trim();
       }
 
-      console.log('[Services] Query:', query);
       const response = await servicesApi.getAll(query);
-      
-      console.log('[Services] Full response:', response);
-      console.log('[Services] Response data:', response.data);
-
-      // Handle different response structures (same pattern as branches)
-      let responseData = response.data;
-      
-      // If data is wrapped in a data property (common NestJS pattern)
-      if (responseData && typeof responseData === 'object' && 'data' in responseData && !Array.isArray(responseData.data)) {
-        responseData = responseData.data;
-      }
-
-      console.log('[Services] Processed responseData:', responseData);
-
-      // Validate response structure
-      if (!responseData) {
-        console.error('[Services] No response data');
-        setError('No data received from server');
-        setServices([]);
-        return;
-      }
-
-      // Check if response has the expected structure
-      let servicesData: Service[] = [];
-      let metaData: PaginationMeta | null = null;
-
-      if (Array.isArray(responseData)) {
-        // API returned array directly (old format)
-        console.log('[Services] Response is array, using directly');
-        servicesData = responseData;
-        metaData = {
-          total: responseData.length,
-          page: 1,
-          limit: 10,
-          totalPages: 1,
-        };
-      } else if (responseData.data && Array.isArray(responseData.data)) {
-        // API returned { data: [...], meta: {...} }
-        console.log('[Services] Response has data property');
-        servicesData = responseData.data;
-        metaData = responseData.meta || {
-          total: servicesData.length,
-          page: 1,
-          limit: 10,
-          totalPages: 1,
-        };
-      } else {
-        console.error('[Services] Unexpected response format:', responseData);
-        setError('Invalid data format received from server');
-        setServices([]);
-        return;
-      }
-
-      console.log('[Services] Services data:', servicesData);
-      console.log('[Services] Meta data:', metaData);
-      console.log('[Services] Number of services:', servicesData.length);
+      // TransformInterceptor wraps: { success, data: { data: [], meta: {} } }
+      const payload = (response.data as any)?.data;
+      const servicesData = Array.isArray(payload?.data) ? payload.data : [];
+      const metaData = payload?.meta ?? { total: 0, page: 1, limit: 10, totalPages: 0 };
 
       setServices(servicesData);
       setMeta(metaData);
       
     } catch (err: any) {
-      console.error('[Services] Error fetching services:', err);
-      console.error('[Services] Error response:', err.response);
-      console.error('[Services] Error status:', err.response?.status);
-      console.error('[Services] Error data:', err.response?.data);
-      
       if (err.response?.status === 401) {
         setError('Unauthorized - Please login');
         addToast("Please login to view services", "error");
@@ -149,7 +90,6 @@ export default function ServicesPage() {
       setServices([]);
     } finally {
       setIsLoading(false);
-      console.log('[Services] Fetch complete');
     }
   }, [addToast, router]);
 
@@ -167,28 +107,13 @@ export default function ServicesPage() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    console.log('[Services] Delete clicked for:', id, name);
-    
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
-      console.log('[Services] Delete cancelled by user');
-      return;
-    }
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
 
-    console.log('[Services] Proceeding with delete for:', id);
-    
     try {
-      const response = await servicesApi.delete(id);
-      console.log('[Services] Delete response:', response);
+      await servicesApi.delete(id);
       addToast("Service deleted successfully", "success");
-      // Refresh the list to show updated data
       fetchServices();
     } catch (error: any) {
-      console.error("[Services] Delete failed:", error);
-      console.error("[Services] Error response:", error.response);
-      console.error("[Services] Error status:", error.response?.status);
-      console.error("[Services] Error data:", error.response?.data);
-      
-      // Handle 409 conflict errors with specific message
       const errorMessage = error.response?.data?.message || getErrorMessage(error);
       addToast(errorMessage, "error");
     }
@@ -270,17 +195,6 @@ export default function ServicesPage() {
         </div>
       </div>
 
-      {/* Debug Info - Remove in production */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="bg-gray-100 p-4 rounded-lg text-xs font-mono">
-          <p><strong>Debug Info:</strong></p>
-          <p>Loading: {isLoading ? 'Yes' : 'No'}</p>
-          <p>Error: {error || 'None'}</p>
-          <p>Services count: {Array.isArray(services) ? services.length : 'Invalid'}</p>
-          <p>Total in meta: {meta.total}</p>
-          <p>Page: {meta.page}</p>
-        </div>
-      )}
 
       {/* Services Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -311,13 +225,6 @@ export default function ServicesPage() {
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#00BCD4]" />
                     <p className="mt-2 text-sm text-gray-500">Loading services...</p>
-                  </td>
-                </tr>
-              ) : !Array.isArray(services) ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-red-500">
-                    <p>Error: Services data is not an array</p>
-                    <p className="text-sm">Check console for details</p>
                   </td>
                 </tr>
               ) : services.length === 0 ? (
