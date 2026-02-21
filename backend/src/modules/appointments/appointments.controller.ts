@@ -13,6 +13,7 @@ import { AppointmentsService } from './appointments.service';
 import { CurrentUser, Roles } from '../../core/decorators';
 import { UserRole } from '../../shared/enums';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
+import { formatList } from '../../shared/utils';
 
 @ApiTags('Appointments')
 @Controller('appointments')
@@ -36,16 +37,19 @@ export class AppointmentsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.appointmentsService.getAdminAppointments({
+    const parsedPage = page ? parseInt(page, 10) : 1;
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    const { items, total } = await this.appointmentsService.getAdminAppointments({
       status,
       branchId,
       doctorId,
       startDate,
       endDate,
       search,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 20,
+      page: parsedPage,
+      limit: parsedLimit,
     });
+    return formatList(items, total, { page: parsedPage, limit: parsedLimit });
   }
 
   @Get()

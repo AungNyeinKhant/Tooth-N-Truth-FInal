@@ -30,7 +30,7 @@ export class DoctorsService {
     });
   }
 
-  async findAll(query: QueryDoctorDto) {
+  async findAll(query: QueryDoctorDto): Promise<{ items: any[]; total: number }> {
     const { search, status, branchId, specialization, page = 1, limit = 10 } = query;
     
     const where: any = {};
@@ -61,7 +61,7 @@ export class DoctorsService {
       ];
     }
 
-    const [doctors, total] = await Promise.all([
+    const [items, total] = await Promise.all([
       this.prisma.doctor.findMany({
         where,
         select: {
@@ -89,15 +89,7 @@ export class DoctorsService {
       this.prisma.doctor.count({ where }),
     ]);
 
-    return {
-      data: doctors,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return { items, total };
   }
 
   async findOne(id: string) {

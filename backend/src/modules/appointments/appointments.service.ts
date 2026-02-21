@@ -8,7 +8,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { UserRole } from '../../shared/enums';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
 
-interface AdminAppointmentsQuery {
+export interface AdminAppointmentsQuery {
   status?: string;
   branchId?: string;
   doctorId?: string;
@@ -23,7 +23,7 @@ interface AdminAppointmentsQuery {
 export class AppointmentsService {
   constructor(private prisma: PrismaService) {}
 
-  async getAdminAppointments(query: AdminAppointmentsQuery) {
+  async getAdminAppointments(query: AdminAppointmentsQuery): Promise<{ items: any[]; total: number }> {
     const {
       status,
       branchId,
@@ -84,65 +84,56 @@ export class AppointmentsService {
       ];
     }
 
-    // Get total count
-    const total = await this.prisma.appointment.count({ where });
-
-    // Get paginated appointments
-    const appointments = await this.prisma.appointment.findMany({
-      where,
-      include: {
-        patient: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
+    const [items, total] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where,
+        include: {
+          patient: {
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  phone: true,
+                },
               },
             },
           },
-        },
-        doctor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            specialization: true,
+          doctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              specialization: true,
+            },
+          },
+          branch: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          service: {
+            select: {
+              id: true,
+              name: true,
+              duration: true,
+              price: true,
+            },
           },
         },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        service: {
-          select: {
-            id: true,
-            name: true,
-            duration: true,
-            price: true,
-          },
-        },
-      },
-      orderBy: [
-        { appointmentDate: 'desc' },
-        { startTime: 'asc' },
-      ],
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+        orderBy: [
+          { appointmentDate: 'desc' },
+          { startTime: 'asc' },
+        ],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.appointment.count({ where }),
+    ]);
 
-    return {
-      data: appointments,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return { items, total };
   }
 
   async findAll(

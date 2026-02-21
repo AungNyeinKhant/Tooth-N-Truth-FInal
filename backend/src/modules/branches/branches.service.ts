@@ -100,7 +100,7 @@ export class BranchesService {
     return result;
   }
 
-  async findAll(query: { search?: string; status?: string; page?: number; limit?: number }) {
+  async findAll(query: { search?: string; status?: string; page?: number; limit?: number }): Promise<{ items: any[]; total: number }> {
     const { search, status = 'active', page = 1, limit = 10 } = query;
 
     // Build where clause
@@ -125,50 +125,39 @@ export class BranchesService {
     // Calculate pagination
     const skip = (page - 1) * limit;
 
-    // Get total count for pagination
-    const total = await this.prisma.branch.count({ where });
-
-    // Get paginated branches with manager info
-    const branches = await this.prisma.branch.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        email: true,
-        isActive: true,
-        createdAt: true,
-        managers: {
-          select: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
+    // Get total count and paginated branches together
+    const [items, total] = await Promise.all([
+      this.prisma.branch.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+          managers: {
+            select: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: { name: 'asc' },
-      skip,
-      take: limit,
-    });
+        orderBy: { name: 'asc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.branch.count({ where }),
+    ]);
 
-    // Calculate pagination metadata
-    const totalPages = Math.ceil(total / limit);
-
-    return {
-      data: branches,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages,
-      },
-    };
+    return { items, total };
   }
 
   async findOne(id: string) {

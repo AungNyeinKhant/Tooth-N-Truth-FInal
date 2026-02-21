@@ -18,6 +18,7 @@ import { Public, Roles } from '../../core/decorators';
 import { RolesGuard } from '../../core/guards';
 import { JwtAuthGuard } from '../../core/guards';
 import { UserRole } from '../../shared/enums';
+import { formatList } from '../../shared/utils';
 
 @ApiTags('Branches')
 @Controller('branches')
@@ -29,7 +30,8 @@ export class BranchesController {
   @ApiOperation({ summary: 'Get all branches with search, filter, and pagination' })
   @ApiResponse({ status: 200, description: 'List of branches with pagination metadata' })
   async findAll(@Query() query: BranchQueryDto) {
-    return this.branchesService.findAll(query);
+    const { items, total } = await this.branchesService.findAll(query);
+    return formatList(items, total, query);
   }
 
   @Public()
