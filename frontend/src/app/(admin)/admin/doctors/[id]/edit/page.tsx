@@ -86,7 +86,8 @@ export default function EditDoctorPage() {
       try {
         setIsLoadingBranches(true);
         const response = await branchesApi.getAll({ status: "active", limit: 100 });
-        const branchesData = response.data.data || [];
+        const payload = (response.data as any)?.data;
+        const branchesData = Array.isArray(payload?.data) ? payload.data : [];
         setBranches(branchesData);
       } catch (error) {
         console.error("Failed to fetch branches:", error);
