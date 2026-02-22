@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
   BRANCHES: '/api/branches',
   SERVICES: '/api/services',
   DOCTORS: '/api/doctors',
+  USERS: '/api/users',
   APPOINTMENTS: '/api/appointments',
   PATIENTS: '/api/patients',
   ANALYTICS: '/api/analytics',
