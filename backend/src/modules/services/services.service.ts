@@ -30,7 +30,7 @@ export class ServicesService {
     };
   }
 
-  async findAll(query: QueryServiceDto) {
+  async findAll(query: QueryServiceDto): Promise<{ items: any[]; total: number }> {
     const { search, status, page = 1, limit = 10 } = query;
     
     const where: any = {};
@@ -48,7 +48,7 @@ export class ServicesService {
       where.isActive = status === ServiceStatus.ACTIVE;
     }
     
-    const [services, total] = await Promise.all([
+    const [items, total] = await Promise.all([
       this.prisma.service.findMany({
         where,
         select: {
@@ -68,18 +68,7 @@ export class ServicesService {
       this.prisma.service.count({ where }),
     ]);
 
-    // Transform services to convert Decimal price to number
-    const transformedServices = services.map(service => this.transformService(service));
-
-    return {
-      data: transformedServices,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return { items, total };
   }
 
   async findOne(id: string) {

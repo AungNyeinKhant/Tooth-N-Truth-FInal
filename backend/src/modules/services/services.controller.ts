@@ -20,6 +20,7 @@ import { Public, Roles } from '../../core/decorators';
 import { RolesGuard } from '../../core/guards';
 import { JwtAuthGuard } from '../../core/guards';
 import { UserRole } from '../../shared/enums';
+import { formatList } from '../../shared/utils';
 
 @ApiTags('Services')
 @Controller('services')
@@ -31,7 +32,11 @@ export class ServicesController {
   @ApiOperation({ summary: 'Get all services with search, filter, pagination' })
   @ApiResponse({ status: 200, description: 'List of services' })
   async findAll(@Query() query: QueryServiceDto) {
-    return this.servicesService.findAll(query);
+    const { items, total } = await this.servicesService.findAll(query);
+    return formatList(items, total, query, (s) => ({
+      ...s,
+      price: Number(s.price),
+    }));
   }
 
   @Public()

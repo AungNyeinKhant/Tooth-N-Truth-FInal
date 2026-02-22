@@ -18,6 +18,7 @@ import { Public, Roles } from '../../core/decorators';
 import { RolesGuard } from '../../core/guards';
 import { JwtAuthGuard } from '../../core/guards';
 import { UserRole } from '../../shared/enums';
+import { formatList } from '../../shared/utils';
 
 @ApiTags('Doctors')
 @Controller('doctors')
@@ -29,7 +30,8 @@ export class DoctorsController {
   @ApiOperation({ summary: 'Get all doctors with search, filter, pagination' })
   @ApiResponse({ status: 200, description: 'List of doctors with pagination metadata' })
   async findAll(@Query() query: QueryDoctorDto) {
-    return this.doctorsService.findAll(query);
+    const { items, total } = await this.doctorsService.findAll(query);
+    return formatList(items, total, query);
   }
 
   @Public()

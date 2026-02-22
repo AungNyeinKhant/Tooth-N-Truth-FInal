@@ -57,36 +57,17 @@ export default function DoctorsPage() {
   const branchRef = useRef("");
 
   const fetchBranches = useCallback(async () => {
-    console.log('[Doctors] Fetching branches...');
     try {
       const response = await branchesApi.getAll({ status: "active", limit: 100 });
-      console.log('[Doctors] Branches response:', response.data);
-      
-      // Handle different response structures (same pattern as branches page)
-      let responseData = response.data;
-      
-      // If data is wrapped in a data property (common NestJS pattern)
-      if (responseData && typeof responseData === 'object' && 'data' in responseData && !Array.isArray(responseData.data)) {
-        responseData = responseData.data;
-      }
-      
-      let branchesData: Branch[] = [];
-      
-      if (Array.isArray(responseData)) {
-        branchesData = responseData;
-      } else if (responseData && responseData.data && Array.isArray(responseData.data)) {
-        branchesData = responseData.data;
-      }
-      
-      console.log('[Doctors] Branches data:', branchesData);
-      setBranches(branchesData);
+      // TransformInterceptor wraps: { success, data: { data: [], meta: {} } }
+      const payload = (response.data as any)?.data;
+      setBranches(Array.isArray(payload?.data) ? payload.data : []);
     } catch (error) {
       console.error("Failed to fetch branches:", error);
     }
   }, []);
 
   const fetchDoctors = useCallback(async () => {
-    console.log('[Doctors] Starting fetch...');
     setIsLoading(true);
     setError(null);
     
@@ -105,75 +86,16 @@ export default function DoctorsPage() {
         query.branchId = branchRef.current;
       }
 
-      console.log('[Doctors] Query:', query);
       const response = await doctorsApi.getAll(query);
-      
-      console.log('[Doctors] Full response:', response);
-      console.log('[Doctors] Response data:', response.data);
-      console.log('[Doctors] Response data type:', typeof response.data);
-
-      // Handle different response structures (same pattern as branches)
-      let responseData = response.data;
-      
-      // If data is wrapped in a data property (common NestJS pattern)
-      if (responseData && typeof responseData === 'object' && 'data' in responseData && !Array.isArray(responseData.data)) {
-        responseData = responseData.data;
-      }
-      
-      console.log('[Doctors] Processed responseData:', responseData);
-
-      // Validate response structure
-      if (!responseData) {
-        console.error('[Doctors] No response data');
-        setError('No data received from server');
-        setDoctors([]);
-        return;
-      }
-
-      // Check if response has the expected structure
-      let doctorsData: Doctor[] = [];
-      let metaData: PaginationMeta | null = null;
-
-      if (Array.isArray(responseData)) {
-        // API returned array directly (old format)
-        console.log('[Doctors] Response is array, using directly');
-        doctorsData = responseData;
-        metaData = {
-          total: responseData.length,
-          page: 1,
-          limit: 10,
-          totalPages: 1,
-        };
-      } else if (responseData.data && Array.isArray(responseData.data)) {
-        // API returned { data: [...], meta: {...} }
-        console.log('[Doctors] Response has data property');
-        doctorsData = responseData.data;
-        metaData = responseData.meta || {
-          total: doctorsData.length,
-          page: 1,
-          limit: 10,
-          totalPages: 1,
-        };
-      } else {
-        console.error('[Doctors] Unexpected response format:', responseData);
-        setError('Invalid data format received from server');
-        setDoctors([]);
-        return;
-      }
-
-      console.log('[Doctors] Doctors data:', doctorsData);
-      console.log('[Doctors] Meta data:', metaData);
-      console.log('[Doctors] Number of doctors:', doctorsData.length);
+      // TransformInterceptor wraps: { success, data: { data: [], meta: {} } }
+      const payload = (response.data as any)?.data;
+      const doctorsData = Array.isArray(payload?.data) ? payload.data : [];
+      const metaData = payload?.meta ?? { total: 0, page: 1, limit: 10, totalPages: 0 };
 
       setDoctors(doctorsData);
       setMeta(metaData);
       
     } catch (err: any) {
-      console.error('[Doctors] Error fetching doctors:', err);
-      console.error('[Doctors] Error response:', err.response);
-      console.error('[Doctors] Error status:', err.response?.status);
-      console.error('[Doctors] Error data:', err.response?.data);
-      
       if (err.response?.status === 401) {
         setError('Unauthorized - Please login');
         addToast("Please login to view doctors", "error");
@@ -190,7 +112,6 @@ export default function DoctorsPage() {
       setDoctors([]);
     } finally {
       setIsLoading(false);
-      console.log('[Doctors] Fetch complete');
     }
   }, [addToast, router]);
 
@@ -212,26 +133,13 @@ export default function DoctorsPage() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    console.log('[Doctors] Delete clicked for:', id, name);
-    
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
-      console.log('[Doctors] Delete cancelled by user');
-      return;
-    }
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
 
-    console.log('[Doctors] Proceeding with delete for:', id);
-    
     try {
-      const response = await doctorsApi.delete(id);
-      console.log('[Doctors] Delete response:', response);
+      await doctorsApi.delete(id);
       addToast("Doctor deleted successfully", "success");
       fetchDoctors();
     } catch (error: any) {
-      console.error("[Doctors] Delete failed:", error);
-      console.error("[Doctors] Error response:", error.response);
-      console.error("[Doctors] Error status:", error.response?.status);
-      console.error("[Doctors] Error data:", error.response?.data);
-      
       const errorMessage = error.response?.data?.message || getErrorMessage(error);
       addToast(errorMessage, "error");
     }
@@ -337,17 +245,6 @@ export default function DoctorsPage() {
         </div>
       </div>
 
-      {/* Debug Info - Remove in production */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="bg-gray-100 p-4 rounded-lg text-xs font-mono">
-          <p><strong>Debug Info:</strong></p>
-          <p>Loading: {isLoading ? 'Yes' : 'No'}</p>
-          <p>Error: {error || 'None'}</p>
-          <p>Doctors count: {Array.isArray(doctors) ? doctors.length : 'Invalid'}</p>
-          <p>Total in meta: {meta.total}</p>
-          <p>Page: {meta.page}</p>
-        </div>
-      )}
 
       {/* Doctors Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -381,13 +278,6 @@ export default function DoctorsPage() {
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#00BCD4]" />
                     <p className="mt-2 text-sm text-gray-500">Loading doctors...</p>
-                  </td>
-                </tr>
-              ) : !Array.isArray(doctors) ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-red-500">
-                    <p>Error: Doctors data is not an array</p>
-                    <p className="text-sm">Check console for details</p>
                   </td>
                 </tr>
               ) : doctors.length === 0 ? (

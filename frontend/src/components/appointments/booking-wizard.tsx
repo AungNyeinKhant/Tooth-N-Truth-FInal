@@ -102,18 +102,15 @@ export function BookingWizard() {
       const loadDoctors = async () => {
         setLoading(true);
         try {
-          const res = await doctorsApi.getAll(selectedBranch.id);
-          // Handle doctors response - API may return array or { data: [...], meta: {...} }
-          let doctorsData = res.data;
-          if (
-            doctorsData &&
-            typeof doctorsData === "object" &&
-            "data" in doctorsData &&
-            !Array.isArray(doctorsData)
-          ) {
-            doctorsData = doctorsData.data;
-          }
-          setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
+          const res = await doctorsApi.getAll({ branchId: selectedBranch.id });
+
+          console.log("[Booking] Raw doctorsRes:", res);
+          console.log("[Booking] Raw doctorsRes.data:", res.data);
+
+          const doctorsList = extractList(res);
+          console.log("[Booking] Final doctorsList:", doctorsList);
+
+          setDoctors(Array.isArray(doctorsList) ? doctorsList : []);
         } catch (error) {
           console.error("Failed to load doctors:", error);
           addToast("Failed to load doctors", "error");
@@ -140,7 +137,7 @@ export function BookingWizard() {
             selectedService.id,
           );
           // Handle slots response - API may return array or { data: [...], meta: {...} }
-          let slotsData = res.data;
+          let slotsData: any = res.data;
           if (
             slotsData &&
             typeof slotsData === "object" &&
