@@ -1,91 +1,84 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui";
-import { Doctor, DAY_NAMES, DAY_NAMES_SHORT } from "@/lib/api/schedules.api";
+import { Slot, Doctor, DAY_NAMES } from "@/lib/api/slots.api";
 
-const bulkScheduleSchema = z.object({
+const slotSchema = z.object({
   doctorId: z.string().min(1, "Doctor is required"),
-  days: z.array(z.number().min(0).max(6)).min(1, "Select at least one day"),
+  dayOfWeek: z.number().min(0).max(6),
   startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, "Invalid time format"),
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, "Invalid time format"),
-  slotDuration: z.number().min(5).max(120),
   bufferTime: z.number().min(0).max(60),
   isActive: z.boolean(),
 });
 
-type BulkScheduleFormData = z.infer<typeof bulkScheduleSchema>;
+type SlotFormData = z.infer<typeof slotSchema>;
 
-interface BulkScheduleModalProps {
+interface SlotModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: BulkScheduleFormData) => Promise<void>;
+  onSubmit: (data: SlotFormData) => Promise<void>;
+  slot?: Slot | null;
   doctors: Doctor[];
   isLoading?: boolean;
 }
 
-const WEEKDAYS = [1, 2, 3, 4, 5]; // Mon-Fri
-
-export function BulkScheduleModal({
+export function SlotModal({
   isOpen,
   onClose,
   onSubmit,
+  slot,
   doctors,
   isLoading = false,
-}: BulkScheduleModalProps) {
+}: SlotModalProps) {
+  const isEditing = !!slot;
+
   const {
     register,
     handleSubmit,
     reset,
-    watch,
     setValue,
     formState: { errors },
-  } = useForm<BulkScheduleFormData>({
-    resolver: zodResolver(bulkScheduleSchema),
+  } = useForm<SlotFormData>({
+    resolver: zodResolver(slotSchema),
     defaultValues: {
-      doctorId: doctors.length === 1 ? doctors[0].id : "",
-      days: WEEKDAYS,
+      doctorId: "",
+      dayOfWeek: 1,
       startTime: "09:00",
-      endTime: "17:00",
-      slotDuration: 30,
-      bufferTime: 10,
+      endTime: "09:30",
+      bufferTime: 5,
       isActive: true,
     },
   });
 
-  const selectedDays = watch("days");
-
-  const toggleDay = (day: number) => {
-    const current = selectedDays || [];
-    if (current.includes(day)) {
-      setValue(
-        "days",
-        current.filter((d) => d !== day)
-      );
+  useEffect(() => {
+    if (slot) {
+      setValue("doctorId", slot.doctorId);
+      setValue("dayOfWeek", slot.dayOfWeek);
+      setValue("startTime", slot.startTime);
+      setValue("endTime", slot.endTime);
+      setValue("bufferTime", slot.bufferTime);
+      setValue("isActive", slot.isActive);
     } else {
-      setValue("days", [...current, day]);
+      reset({
+        doctorId: doctors.length === 1 ? doctors[0].id : "",
+        dayOfWeek: 1,
+        startTime: "09:00",
+        endTime: "09:30",
+        bufferTime: 5,
+        isActive: true,
+      });
     }
-  };
-
-  const selectWeekdays = () => {
-    setValue("days", WEEKDAYS);
-  };
-
-  const selectAll = () => {
-    setValue("days", [0, 1, 2, 3, 4, 5, 6]);
-  };
-
-  const clearAll = () => {
-    setValue("days", []);
-  };
+  }, [slot, doctors, setValue, reset]);
 
   if (!isOpen) return null;
 
-  const handleFormSubmit = async (data: BulkScheduleFormData) => {
+  const handleFormSubmit = async (data: SlotFormData) => {
     await onSubmit(data);
     reset();
     onClose();
@@ -97,7 +90,7 @@ export function BulkScheduleModal({
       <div className="relative z-10 w-full max-w-md bg-white rounded-xl shadow-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            Create Week Schedule
+            {isEditing ? "Edit Slot" : "Add Slot"}
           </h2>
           <button
             onClick={onClose}
@@ -108,7 +101,7 @@ export function BulkScheduleModal({
         </div>
 
         <p className="text-sm text-gray-500 mb-4">
-          Create schedules for multiple days at once. Existing schedules will be skipped.
+          Create a time slot for a specific doctor. Overlapping slots for the same doctor are not allowed.
         </p>
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
@@ -119,7 +112,8 @@ export function BulkScheduleModal({
             </label>
             <select
               {...register("doctorId")}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
+              disabled={isEditing}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100"
             >
               <option value="">Select a doctor</option>
               {doctors.map((doctor) => (
@@ -133,54 +127,24 @@ export function BulkScheduleModal({
             )}
           </div>
 
-          {/* Days Selection */}
+          {/* Day of Week */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Select Days
-              </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={selectWeekdays}
-                  className="text-xs text-[#00BCD4] hover:underline"
-                >
-                  Weekdays
-                </button>
-                <button
-                  type="button"
-                  onClick={selectAll}
-                  className="text-xs text-[#00BCD4] hover:underline"
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  className="text-xs text-gray-500 hover:underline"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Day of Week
+            </label>
+            <select
+              {...register("dayOfWeek", { valueAsNumber: true })}
+              disabled={isEditing}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100"
+            >
               {DAY_NAMES.map((day, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => toggleDay(index)}
-                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                    selectedDays?.includes(index)
-                      ? "bg-[#00BCD4] text-white border-[#00BCD4]"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-[#00BCD4]"
-                  }`}
-                >
-                  {DAY_NAMES_SHORT[index]}
-                </button>
+                <option key={index} value={index}>
+                  {day}
+                </option>
               ))}
-            </div>
-            {errors.days && (
-              <p className="text-sm text-red-500 mt-1">{errors.days.message}</p>
+            </select>
+            {errors.dayOfWeek && (
+              <p className="text-sm text-red-500 mt-1">{errors.dayOfWeek.message}</p>
             )}
           </div>
 
@@ -214,32 +178,22 @@ export function BulkScheduleModal({
             </div>
           </div>
 
-          {/* Slot Duration & Buffer */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Slot Duration (min)
-              </label>
-              <input
-                type="number"
-                {...register("slotDuration", { valueAsNumber: true })}
-                min={5}
-                max={120}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Buffer Time (min)
-              </label>
-              <input
-                type="number"
-                {...register("bufferTime", { valueAsNumber: true })}
-                min={0}
-                max={60}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
-              />
-            </div>
+          {/* Buffer Time */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Buffer Time (minutes)
+            </label>
+            <input
+              type="number"
+              {...register("bufferTime", { valueAsNumber: true })}
+              min={0}
+              max={60}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
+            />
+            <p className="text-xs text-gray-400 mt-1">Time gap after this slot ends</p>
+            {errors.bufferTime && (
+              <p className="text-sm text-red-500 mt-1">{errors.bufferTime.message}</p>
+            )}
           </div>
 
           {/* Active Toggle */}
@@ -261,10 +215,10 @@ export function BulkScheduleModal({
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
+                  Saving...
                 </>
               ) : (
-                "Create Schedules"
+                isEditing ? "Update" : "Create"
               )}
             </Button>
           </div>

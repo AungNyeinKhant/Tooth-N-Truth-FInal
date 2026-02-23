@@ -6,30 +6,6 @@ import { CreateDoctorDto, UpdateDoctorDto, QueryDoctorDto, DoctorStatus } from '
 export class DoctorsService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Create default schedule for a new doctor (Mon-Fri, 9:00-17:00)
-   */
-  private async createDefaultSchedule(doctorId: string, branchId: string) {
-    const defaultSchedule = [];
-    // Monday = 1, Tuesday = 2, ..., Friday = 5
-    for (let dayOfWeek = 1; dayOfWeek <= 5; dayOfWeek++) {
-      defaultSchedule.push({
-        doctorId,
-        branchId,
-        dayOfWeek,
-        startTime: '09:00',
-        endTime: '17:00',
-        slotDuration: 30,
-        bufferTime: 10,
-        isActive: true,
-      });
-    }
-
-    await this.prisma.doctorSchedule.createMany({
-      data: defaultSchedule,
-    });
-  }
-
   async findAll(query: QueryDoctorDto): Promise<{ items: any[]; total: number }> {
     const { search, status, branchId, specialization, page = 1, limit = 10 } = query;
     
@@ -115,18 +91,6 @@ export class DoctorsService {
             phone: true,
           },
         },
-        schedules: {
-          where: { isActive: true },
-          select: {
-            id: true,
-            dayOfWeek: true,
-            startTime: true,
-            endTime: true,
-            slotDuration: true,
-            bufferTime: true,
-          },
-          orderBy: { dayOfWeek: 'asc' },
-        },
       },
     });
 
@@ -137,7 +101,7 @@ export class DoctorsService {
     return doctor;
   }
 
-  async getDoctorSchedules(doctorId: string) {
+  async getDoctorSlots(doctorId: string) {
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: doctorId },
     });
@@ -146,7 +110,8 @@ export class DoctorsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    const schedules = await this.prisma.doctorSchedule.findMany({
+    // Get doctor's slots
+    const slots = await this.prisma.doctorSlot.findMany({
       where: {
         doctorId,
         isActive: true,
@@ -156,13 +121,12 @@ export class DoctorsService {
         dayOfWeek: true,
         startTime: true,
         endTime: true,
-        slotDuration: true,
         bufferTime: true,
       },
-      orderBy: { dayOfWeek: 'asc' },
+      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
     });
 
-    return schedules;
+    return slots;
   }
 
   async getAvailableSlots(doctorId: string, dateString: string, serviceId: string) {
@@ -170,6 +134,16 @@ export class DoctorsService {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) {
       throw new BadRequestException('Invalid date format');
+    }
+
+    // Get doctor
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id: doctorId },
+      select: { branchId: true },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
     }
 
     // Get service duration
@@ -185,17 +159,18 @@ export class DoctorsService {
     // Get day of week (0 = Sunday, 1 = Monday, etc.)
     const dayOfWeek = date.getDay();
 
-    // Get doctor's schedule for this day
-    const schedule = await this.prisma.doctorSchedule.findFirst({
+    // Get all slots for this doctor on this day
+    const slots = await this.prisma.doctorSlot.findMany({
       where: {
         doctorId,
         dayOfWeek,
         isActive: true,
       },
+      orderBy: { startTime: 'asc' },
     });
 
-    if (!schedule) {
-      return []; // Doctor doesn't work on this day
+    if (slots.length === 0) {
+      return []; // Doctor doesn't have slots on this day
     }
 
     // Get existing appointments for this doctor on this date
@@ -219,16 +194,24 @@ export class DoctorsService {
       },
     });
 
-    // Generate available slots
-    const slots = this.calculateAvailableSlots(
-      schedule.startTime,
-      schedule.endTime,
-      service.duration,
-      schedule.bufferTime,
-      existingAppointments,
-    );
+    // Generate available slots from each slot definition
+    const availableSlots: Array<{ startTime: string; endTime: string }> = [];
 
-    return slots;
+    for (const slot of slots) {
+      const slotAvailable = this.calculateAvailableSlots(
+        slot.startTime,
+        slot.endTime,
+        service.duration,
+        slot.bufferTime,
+        existingAppointments,
+      );
+      availableSlots.push(...slotAvailable);
+    }
+
+    // Sort by start time
+    availableSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    return availableSlots;
   }
 
   private calculateAvailableSlots(
@@ -263,7 +246,7 @@ export class DoctorsService {
         slotEndMin -= 60;
       }
       
-      // Check if slot exceeds doctor's end time
+      // Check if slot exceeds branch end time
       if (slotEndHour > endHour || (slotEndHour === endHour && slotEndMin > endMin)) {
         break;
       }
@@ -320,60 +303,37 @@ export class DoctorsService {
       }
     }
 
-    // Create doctor and default schedule in transaction
-    const doctor = await this.prisma.$transaction(async (prisma) => {
-      const newDoctor = await prisma.doctor.create({
-        data: {
-          firstName: createDoctorDto.firstName,
-          lastName: createDoctorDto.lastName,
-          specialization: createDoctorDto.specialization,
-          phone: createDoctorDto.phone,
-          email: createDoctorDto.email,
-          bio: createDoctorDto.bio,
-          branchId: createDoctorDto.branchId,
-          isActive: createDoctorDto.isActive ?? true,
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          specialization: true,
-          phone: true,
-          email: true,
-          bio: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          branchId: true,
-          branch: {
-            select: {
-              id: true,
-              name: true,
-            },
+    // Create doctor (no auto-schedule creation - schedules are branch-wide)
+    const doctor = await this.prisma.doctor.create({
+      data: {
+        firstName: createDoctorDto.firstName,
+        lastName: createDoctorDto.lastName,
+        specialization: createDoctorDto.specialization,
+        phone: createDoctorDto.phone,
+        email: createDoctorDto.email,
+        bio: createDoctorDto.bio,
+        branchId: createDoctorDto.branchId,
+        isActive: createDoctorDto.isActive ?? true,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        bio: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        branchId: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
           },
         },
-      });
-
-      // Create default schedule (Mon-Fri, 9-5)
-      const defaultSchedules = [];
-      for (let dayOfWeek = 1; dayOfWeek <= 5; dayOfWeek++) {
-        defaultSchedules.push({
-          doctorId: newDoctor.id,
-          branchId: createDoctorDto.branchId,
-          dayOfWeek,
-          startTime: '09:00',
-          endTime: '17:00',
-          slotDuration: 30,
-          bufferTime: 10,
-          isActive: true,
-        });
-      }
-
-      await prisma.doctorSchedule.createMany({
-        data: defaultSchedules,
-      });
-
-      return newDoctor;
+      },
     });
 
     return doctor;
@@ -467,7 +427,7 @@ export class DoctorsService {
       );
     }
 
-    // Hard delete - doctor schedules will cascade delete
+    // Hard delete (no schedule cascade - schedules are branch-wide)
     await this.prisma.doctor.delete({
       where: { id },
     });

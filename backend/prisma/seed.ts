@@ -9,7 +9,7 @@ async function main() {
   // Clean existing data
   await prisma.medicalRecord.deleteMany();
   await prisma.appointment.deleteMany();
-  await prisma.doctorSchedule.deleteMany();
+  await prisma.doctorSlot.deleteMany();
   await prisma.doctor.deleteMany();
   await prisma.branchService.deleteMany();
   await prisma.service.deleteMany();
@@ -278,25 +278,94 @@ async function main() {
   );
   console.log(`✅ Created ${doctors.length} doctors`);
 
-  // Create Doctor Schedules (Monday-Friday, 9 AM - 5 PM)
+  // Create Doctor Slots (morning and afternoon slots for each doctor)
+  // Example: Morning 9:00-9:30, 9:35-10:05, 10:10-10:40 | Afternoon 14:00-14:30, 14:35-15:05
+  let slotCount = 0;
   for (const doctor of doctors) {
+    // Create slots for Monday-Friday
     for (let day = 1; day <= 5; day++) {
-      // Monday=1 to Friday=5
-      await prisma.doctorSchedule.create({
+      // Morning slots
+      await prisma.doctorSlot.create({
         data: {
-          doctorId: doctor.id,
           branchId: doctor.branchId,
+          doctorId: doctor.id,
           dayOfWeek: day,
           startTime: '09:00',
-          endTime: '17:00',
-          slotDuration: 30,
-          bufferTime: 10,
+          endTime: '09:30',
+          bufferTime: 5,
           isActive: true,
         },
       });
+      slotCount++;
+
+      await prisma.doctorSlot.create({
+        data: {
+          branchId: doctor.branchId,
+          doctorId: doctor.id,
+          dayOfWeek: day,
+          startTime: '09:35',
+          endTime: '10:05',
+          bufferTime: 5,
+          isActive: true,
+        },
+      });
+      slotCount++;
+
+      await prisma.doctorSlot.create({
+        data: {
+          branchId: doctor.branchId,
+          doctorId: doctor.id,
+          dayOfWeek: day,
+          startTime: '10:10',
+          endTime: '10:40',
+          bufferTime: 5,
+          isActive: true,
+        },
+      });
+      slotCount++;
+
+      // Afternoon slots
+      await prisma.doctorSlot.create({
+        data: {
+          branchId: doctor.branchId,
+          doctorId: doctor.id,
+          dayOfWeek: day,
+          startTime: '14:00',
+          endTime: '14:30',
+          bufferTime: 5,
+          isActive: true,
+        },
+      });
+      slotCount++;
+
+      await prisma.doctorSlot.create({
+        data: {
+          branchId: doctor.branchId,
+          doctorId: doctor.id,
+          dayOfWeek: day,
+          startTime: '14:35',
+          endTime: '15:05',
+          bufferTime: 5,
+          isActive: true,
+        },
+      });
+      slotCount++;
+
+      await prisma.doctorSlot.create({
+        data: {
+          branchId: doctor.branchId,
+          doctorId: doctor.id,
+          dayOfWeek: day,
+          startTime: '15:10',
+          endTime: '15:40',
+          bufferTime: 5,
+          isActive: true,
+        },
+      });
+      slotCount++;
     }
   }
-  console.log(`✅ Created doctor schedules`);
+  console.log(`✅ Created ${slotCount} doctor slots`);
 
   // Create Sample Patients
   const patientPassword = await bcrypt.hash('patient123', 10);

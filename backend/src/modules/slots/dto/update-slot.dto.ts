@@ -3,13 +3,12 @@ import {
   IsString,
   IsInt,
   Min,
-  Max,
   Matches,
   IsOptional,
   IsBoolean,
 } from 'class-validator';
 
-export class UpdateScheduleDto {
+export class UpdateSlotDto {
   @ApiPropertyOptional({ description: 'Start time (HH:mm format)', example: '09:00' })
   @IsOptional()
   @IsString()
@@ -18,7 +17,7 @@ export class UpdateScheduleDto {
   })
   startTime?: string;
 
-  @ApiPropertyOptional({ description: 'End time (HH:mm format)', example: '17:00' })
+  @ApiPropertyOptional({ description: 'End time (HH:mm format)', example: '09:30' })
   @IsOptional()
   @IsString()
   @Matches(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, {
@@ -26,19 +25,13 @@ export class UpdateScheduleDto {
   })
   endTime?: string;
 
-  @ApiPropertyOptional({ description: 'Slot duration in minutes' })
-  @IsOptional()
-  @IsInt()
-  @Min(5)
-  slotDuration?: number;
-
-  @ApiPropertyOptional({ description: 'Buffer time between slots in minutes' })
+  @ApiPropertyOptional({ description: 'Buffer time after slot in minutes' })
   @IsOptional()
   @IsInt()
   @Min(0)
   bufferTime?: number;
 
-  @ApiPropertyOptional({ description: 'Is schedule active' })
+  @ApiPropertyOptional({ description: 'Is slot active' })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;

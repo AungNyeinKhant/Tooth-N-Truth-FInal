@@ -11,7 +11,7 @@ import {
   ArrayNotEmpty,
 } from 'class-validator';
 
-export class BulkScheduleDto {
+export class BulkSlotDto {
   @ApiProperty({ description: 'Doctor ID' })
   @IsString()
   doctorId: string;
@@ -31,26 +31,20 @@ export class BulkScheduleDto {
   })
   startTime: string;
 
-  @ApiProperty({ description: 'End time (HH:mm format)', example: '17:00' })
+  @ApiProperty({ description: 'End time (HH:mm format)', example: '09:30' })
   @IsString()
   @Matches(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, {
     message: 'End time must be in HH:mm format',
   })
   endTime: string;
 
-  @ApiPropertyOptional({ description: 'Slot duration in minutes', default: 30 })
-  @IsOptional()
-  @IsInt()
-  @Min(5)
-  slotDuration?: number;
-
-  @ApiPropertyOptional({ description: 'Buffer time between slots in minutes', default: 10 })
+  @ApiPropertyOptional({ description: 'Buffer time after slot in minutes', default: 5 })
   @IsOptional()
   @IsInt()
   @Min(0)
   bufferTime?: number;
 
-  @ApiPropertyOptional({ description: 'Is schedule active', default: true })
+  @ApiPropertyOptional({ description: 'Is slot active', default: true })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;

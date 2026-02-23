@@ -2,14 +2,13 @@ import apiClient from './axios-instance';
 import { API_ENDPOINTS } from '../constants';
 
 // Types
-export interface Schedule {
+export interface Slot {
   id: string;
-  doctorId: string;
   branchId: string;
+  doctorId: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
-  slotDuration: number;
   bufferTime: number;
   isActive: boolean;
   doctor: {
@@ -20,35 +19,32 @@ export interface Schedule {
   };
 }
 
-export interface CreateScheduleData {
+export interface CreateSlotData {
   doctorId: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
-  slotDuration?: number;
   bufferTime?: number;
   isActive?: boolean;
 }
 
-export interface UpdateScheduleData {
+export interface UpdateSlotData {
   startTime?: string;
   endTime?: string;
-  slotDuration?: number;
   bufferTime?: number;
   isActive?: boolean;
 }
 
-export interface BulkScheduleData {
+export interface BulkSlotData {
   doctorId: string;
   days: number[];
   startTime: string;
   endTime: string;
-  slotDuration?: number;
   bufferTime?: number;
   isActive?: boolean;
 }
 
-export interface ScheduleQuery {
+export interface SlotQuery {
   doctorId?: string;
   dayOfWeek?: number;
   page?: number;
@@ -63,7 +59,7 @@ export interface Doctor {
 }
 
 // Helper to extract list data from response
-const extractList = (response: any): { items: Schedule[]; total: number } => {
+const extractList = (response: any): { items: Slot[]; total: number } => {
   const payload = response.data?.data;
   if (payload?.data && Array.isArray(payload.data)) {
     return {
@@ -78,13 +74,13 @@ const extractList = (response: any): { items: Schedule[]; total: number } => {
 };
 
 // Helper to extract single item from response
-const extractItem = (response: any): Schedule => {
+const extractItem = (response: any): Slot => {
   return response.data?.data ?? response.data;
 };
 
-export const schedulesApi = {
-  // Get all schedules with filters
-  getSchedules: async (query: ScheduleQuery = {}) => {
+export const slotsApi = {
+  // Get all slots with filters
+  getSlots: async (query: SlotQuery = {}) => {
     const params = new URLSearchParams();
     if (query.doctorId) params.append('doctorId', query.doctorId);
     if (query.dayOfWeek !== undefined) params.append('dayOfWeek', String(query.dayOfWeek));
@@ -92,44 +88,44 @@ export const schedulesApi = {
     if (query.limit) params.append('limit', String(query.limit));
 
     const response = await apiClient.get(
-      `${API_ENDPOINTS.SCHEDULES}?${params.toString()}`
+      `${API_ENDPOINTS.SLOTS}?${params.toString()}`
     );
     return extractList(response);
   },
 
-  // Get single schedule
-  getSchedule: async (id: string) => {
-    const response = await apiClient.get(`${API_ENDPOINTS.SCHEDULES}/${id}`);
+  // Get single slot
+  getSlot: async (id: string) => {
+    const response = await apiClient.get(`${API_ENDPOINTS.SLOTS}/${id}`);
     return extractItem(response);
   },
 
   // Get doctors for dropdown
   getDoctors: async () => {
-    const response = await apiClient.get(`${API_ENDPOINTS.SCHEDULES}/doctors`);
+    const response = await apiClient.get(`${API_ENDPOINTS.SLOTS}/doctors`);
     return response.data?.data ?? response.data;
   },
 
-  // Create schedule
-  createSchedule: async (data: CreateScheduleData) => {
-    const response = await apiClient.post(API_ENDPOINTS.SCHEDULES, data);
+  // Create slot
+  createSlot: async (data: CreateSlotData) => {
+    const response = await apiClient.post(API_ENDPOINTS.SLOTS, data);
     return extractItem(response);
   },
 
-  // Update schedule
-  updateSchedule: async (id: string, data: UpdateScheduleData) => {
-    const response = await apiClient.patch(`${API_ENDPOINTS.SCHEDULES}/${id}`, data);
+  // Update slot
+  updateSlot: async (id: string, data: UpdateSlotData) => {
+    const response = await apiClient.patch(`${API_ENDPOINTS.SLOTS}/${id}`, data);
     return extractItem(response);
   },
 
-  // Delete schedule
-  deleteSchedule: async (id: string) => {
-    const response = await apiClient.delete(`${API_ENDPOINTS.SCHEDULES}/${id}`);
+  // Delete slot
+  deleteSlot: async (id: string) => {
+    const response = await apiClient.delete(`${API_ENDPOINTS.SLOTS}/${id}`);
     return response.data;
   },
 
-  // Bulk create schedules
-  bulkCreateSchedules: async (data: BulkScheduleData) => {
-    const response = await apiClient.post(`${API_ENDPOINTS.SCHEDULES}/bulk`, data);
+  // Bulk create slots
+  bulkCreateSlots: async (data: BulkSlotData) => {
+    const response = await apiClient.post(`${API_ENDPOINTS.SLOTS}/bulk`, data);
     return response.data?.data ?? response.data;
   },
 };

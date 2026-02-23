@@ -39,8 +39,8 @@ const navigation = [
     icon: Stethoscope,
   },
   {
-    name: "Schedules",
-    href: "/branch-manager/schedules",
+    name: "Slots",
+    href: "/branch-manager/slots",
     icon: Clock,
   },
   {

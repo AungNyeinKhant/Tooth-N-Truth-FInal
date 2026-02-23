@@ -79,7 +79,7 @@ model Branch {
   doctors       Doctor[]
   services      BranchService[]
   appointments  Appointment[]
-  schedules     DoctorSchedule[]
+  slots         DoctorSlot[]
 
   @@map("branches")
 }
@@ -112,30 +112,28 @@ model Doctor {
   updatedAt       DateTime  @updatedAt
 
   branch          Branch            @relation(fields: [branchId], references: [id])
-  schedules       DoctorSchedule[]
+  slots           DoctorSlot[]
   appointments    Appointment[]
 
   @@map("doctors")
 }
 
-model DoctorSchedule {
+model DoctorSlot {
   id          String    @id @default(uuid())
-  doctorId    String
   branchId    String
-  dayOfWeek   Int       
-  startTime   String    
-  endTime     String    
-  slotDuration Int      @default(30) 
-  bufferTime  Int       @default(10) 
+  doctorId    String
+  dayOfWeek   Int       // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime   String    // HH:mm format
+  endTime     String    // HH:mm format
+  bufferTime  Int       @default(5)  // minutes after slot ends
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  branch      Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
   doctor      Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  branch      Branch @relation(fields: [branchId], references: [id])
 
-  @@unique([doctorId, branchId, dayOfWeek])
-  @@map("doctor_schedules")
+  @@map("doctor_slots")
 }
 
 model Service {

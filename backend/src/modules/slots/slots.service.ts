@@ -7,21 +7,21 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import {
-  CreateScheduleDto,
-  UpdateScheduleDto,
-  QueryScheduleDto,
-  BulkScheduleDto,
+  CreateSlotDto,
+  UpdateSlotDto,
+  QuerySlotDto,
+  BulkSlotDto,
 } from './dto';
 
 @Injectable()
-export class SchedulesService {
+export class SlotsService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Get all schedules for a branch with optional filters
+   * Get all slots for a branch with optional filters
    */
-  async findAll(branchId: string, query: QueryScheduleDto) {
-    const { doctorId, dayOfWeek, page = 1, limit = 10 } = query;
+  async findAll(branchId: string, query: QuerySlotDto) {
+    const { doctorId, dayOfWeek, page = 1, limit = 100 } = query;
 
     const where: any = {
       branchId,
@@ -37,7 +37,7 @@ export class SchedulesService {
     }
 
     const [items, total] = await Promise.all([
-      this.prisma.doctorSchedule.findMany({
+      this.prisma.doctorSlot.findMany({
         where,
         include: {
           doctor: {
@@ -53,17 +53,17 @@ export class SchedulesService {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.doctorSchedule.count({ where }),
+      this.prisma.doctorSlot.count({ where }),
     ]);
 
     return { items, total };
   }
 
   /**
-   * Get a single schedule by ID (validated for branch)
+   * Get a single slot by ID (validated for branch)
    */
   async findOne(id: string, branchId: string) {
-    const schedule = await this.prisma.doctorSchedule.findUnique({
+    const slot = await this.prisma.doctorSlot.findUnique({
       where: { id },
       include: {
         doctor: {
@@ -77,21 +77,21 @@ export class SchedulesService {
       },
     });
 
-    if (!schedule) {
-      throw new NotFoundException('Schedule not found');
+    if (!slot) {
+      throw new NotFoundException('Slot not found');
     }
 
-    if (schedule.branchId !== branchId) {
-      throw new ForbiddenException('You do not have access to this schedule');
+    if (slot.branchId !== branchId) {
+      throw new ForbiddenException('You do not have access to this slot');
     }
 
-    return schedule;
+    return slot;
   }
 
   /**
-   * Create a new schedule
+   * Create a new slot with overlap validation
    */
-  async create(dto: CreateScheduleDto, branchId: string) {
+  async create(dto: CreateSlotDto, branchId: string) {
     // Verify doctor exists and belongs to the branch
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: dto.doctorId },
@@ -110,8 +110,8 @@ export class SchedulesService {
       throw new BadRequestException('Start time must be before end time');
     }
 
-    // Check for existing schedule on same day
-    const existingSchedule = await this.prisma.doctorSchedule.findFirst({
+    // Check for overlapping slots for the same doctor on the same day
+    const existingSlots = await this.prisma.doctorSlot.findMany({
       where: {
         doctorId: dto.doctorId,
         branchId,
@@ -120,24 +120,22 @@ export class SchedulesService {
       },
     });
 
-    if (existingSchedule) {
-      // Check for time overlap
-      if (this.hasTimeOverlap(dto.startTime, dto.endTime, existingSchedule.startTime, existingSchedule.endTime)) {
+    for (const existing of existingSlots) {
+      if (this.hasTimeOverlap(dto.startTime, dto.endTime, existing.startTime, existing.endTime)) {
         throw new ConflictException(
-          'Schedule overlaps with existing schedule for this doctor on the same day',
+          `Slot overlaps with existing slot (${existing.startTime} - ${existing.endTime}) for this doctor on the same day`,
         );
       }
     }
 
-    const schedule = await this.prisma.doctorSchedule.create({
+    const slot = await this.prisma.doctorSlot.create({
       data: {
-        doctorId: dto.doctorId,
         branchId,
+        doctorId: dto.doctorId,
         dayOfWeek: dto.dayOfWeek,
         startTime: dto.startTime,
         endTime: dto.endTime,
-        slotDuration: dto.slotDuration ?? 30,
-        bufferTime: dto.bufferTime ?? 10,
+        bufferTime: dto.bufferTime ?? 5,
         isActive: dto.isActive ?? true,
       },
       include: {
@@ -152,49 +150,50 @@ export class SchedulesService {
       },
     });
 
-    return schedule;
+    return slot;
   }
 
   /**
-   * Update a schedule
+   * Update a slot with overlap validation
    */
-  async update(id: string, dto: UpdateScheduleDto, branchId: string) {
-    // Verify schedule exists and belongs to branch
-    const schedule = await this.findOne(id, branchId);
+  async update(id: string, dto: UpdateSlotDto, branchId: string) {
+    // Verify slot exists and belongs to branch
+    const slot = await this.findOne(id, branchId);
 
     // Validate time range if both are provided
-    const startTime = dto.startTime ?? schedule.startTime;
-    const endTime = dto.endTime ?? schedule.endTime;
+    const startTime = dto.startTime ?? slot.startTime;
+    const endTime = dto.endTime ?? slot.endTime;
 
     if (startTime >= endTime) {
       throw new BadRequestException('Start time must be before end time');
     }
 
-    // Check for overlapping schedules (excluding current one)
+    // Check for overlapping slots (excluding current one)
     if (dto.startTime || dto.endTime) {
-      const existingSchedule = await this.prisma.doctorSchedule.findFirst({
+      const existingSlots = await this.prisma.doctorSlot.findMany({
         where: {
-          doctorId: schedule.doctorId,
+          doctorId: slot.doctorId,
           branchId,
-          dayOfWeek: schedule.dayOfWeek,
+          dayOfWeek: slot.dayOfWeek,
           isActive: true,
           id: { not: id },
         },
       });
 
-      if (existingSchedule && this.hasTimeOverlap(startTime, endTime, existingSchedule.startTime, existingSchedule.endTime)) {
-        throw new ConflictException(
-          'Updated schedule overlaps with another schedule for this doctor on the same day',
-        );
+      for (const existing of existingSlots) {
+        if (this.hasTimeOverlap(startTime, endTime, existing.startTime, existing.endTime)) {
+          throw new ConflictException(
+            `Updated slot overlaps with existing slot (${existing.startTime} - ${existing.endTime}) for this doctor on the same day`,
+          );
+        }
       }
     }
 
-    const updatedSchedule = await this.prisma.doctorSchedule.update({
+    const updatedSlot = await this.prisma.doctorSlot.update({
       where: { id },
       data: {
         startTime: dto.startTime,
         endTime: dto.endTime,
-        slotDuration: dto.slotDuration,
         bufferTime: dto.bufferTime,
         isActive: dto.isActive,
       },
@@ -210,48 +209,29 @@ export class SchedulesService {
       },
     });
 
-    return updatedSchedule;
+    return updatedSlot;
   }
 
   /**
-   * Delete a schedule (soft delete by setting isActive=false)
+   * Delete a slot (soft delete by setting isActive=false)
    */
   async remove(id: string, branchId: string) {
-    // Verify schedule exists and belongs to branch
-    const schedule = await this.findOne(id, branchId);
-
-    // Check for future appointments on this day of week
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const futureAppointments = await this.prisma.appointment.findFirst({
-      where: {
-        doctorId: schedule.doctorId,
-        branchId,
-        appointmentDate: { gte: today },
-        status: 'CONFIRMED',
-      },
-    });
-
-    if (futureAppointments) {
-      throw new ConflictException(
-        'Cannot delete schedule. Doctor has upcoming appointments.',
-      );
-    }
+    // Verify slot exists and belongs to branch
+    const slot = await this.findOne(id, branchId);
 
     // Soft delete
-    await this.prisma.doctorSchedule.update({
+    await this.prisma.doctorSlot.update({
       where: { id },
       data: { isActive: false },
     });
 
-    return { message: 'Schedule deleted successfully' };
+    return { message: 'Slot deleted successfully' };
   }
 
   /**
-   * Bulk create schedules for multiple days
+   * Bulk create slots for multiple days for one doctor
    */
-  async bulkCreate(dto: BulkScheduleDto, branchId: string) {
+  async bulkCreate(dto: BulkSlotDto, branchId: string) {
     // Verify doctor exists and belongs to the branch
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: dto.doctorId },
@@ -273,8 +253,8 @@ export class SchedulesService {
     // Get unique days
     const uniqueDays = [...new Set(dto.days)];
 
-    // Check for existing schedules on these days
-    const existingSchedules = await this.prisma.doctorSchedule.findMany({
+    // Check for existing slots on these days that would overlap
+    const existingSlots = await this.prisma.doctorSlot.findMany({
       where: {
         doctorId: dto.doctorId,
         branchId,
@@ -283,38 +263,67 @@ export class SchedulesService {
       },
     });
 
-    // Filter out days that already have schedules
-    const existingDays = existingSchedules.map((s) => s.dayOfWeek);
-    const newDays = uniqueDays.filter((day) => !existingDays.includes(day));
+    // Group existing slots by day
+    const slotsByDay: Record<number, typeof existingSlots> = {};
+    for (const slot of existingSlots) {
+      if (!slotsByDay[slot.dayOfWeek]) {
+        slotsByDay[slot.dayOfWeek] = [];
+      }
+      slotsByDay[slot.dayOfWeek].push(slot);
+    }
 
-    if (newDays.length === 0) {
+    // Check for overlaps and determine which days can have slots created
+    const daysWithOverlap: number[] = [];
+    const daysToCreate: number[] = [];
+
+    for (const day of uniqueDays) {
+      const daySlots = slotsByDay[day] || [];
+      let hasOverlap = false;
+
+      for (const existing of daySlots) {
+        if (this.hasTimeOverlap(dto.startTime, dto.endTime, existing.startTime, existing.endTime)) {
+          hasOverlap = true;
+          break;
+        }
+      }
+
+      if (hasOverlap) {
+        daysWithOverlap.push(day);
+      } else {
+        daysToCreate.push(day);
+      }
+    }
+
+    if (daysToCreate.length === 0) {
       throw new ConflictException(
-        'All selected days already have schedules. Please edit existing schedules instead.',
+        'All selected days have overlapping slots. Please edit existing slots instead.',
       );
     }
 
-    // Create schedules for new days
-    const schedulesToCreate = newDays.map((dayOfWeek) => ({
-      doctorId: dto.doctorId,
+    // Create slots for valid days
+    const slotsToCreate = daysToCreate.map((dayOfWeek) => ({
       branchId,
+      doctorId: dto.doctorId,
       dayOfWeek,
       startTime: dto.startTime,
       endTime: dto.endTime,
-      slotDuration: dto.slotDuration ?? 30,
-      bufferTime: dto.bufferTime ?? 10,
+      bufferTime: dto.bufferTime ?? 5,
       isActive: dto.isActive ?? true,
     }));
 
-    await this.prisma.doctorSchedule.createMany({
-      data: schedulesToCreate,
+    await this.prisma.doctorSlot.createMany({
+      data: slotsToCreate,
     });
 
-    // Fetch created schedules
-    const createdSchedules = await this.prisma.doctorSchedule.findMany({
+    // Fetch created slots
+    const createdSlots = await this.prisma.doctorSlot.findMany({
       where: {
         doctorId: dto.doctorId,
         branchId,
-        dayOfWeek: { in: newDays },
+        dayOfWeek: { in: daysToCreate },
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        isActive: true,
       },
       include: {
         doctor: {
@@ -330,9 +339,9 @@ export class SchedulesService {
     });
 
     return {
-      message: `Created ${createdSchedules.length} schedules`,
-      schedules: createdSchedules,
-      skippedDays: existingDays,
+      message: `Created ${createdSlots.length} slots`,
+      slots: createdSlots,
+      skippedDays: daysWithOverlap,
     };
   }
 
@@ -357,6 +366,7 @@ export class SchedulesService {
 
   /**
    * Helper: Check if two time ranges overlap
+   * Overlap if: start1 < end2 AND end1 > start2
    */
   private hasTimeOverlap(
     start1: string,

@@ -1,44 +1,40 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { X, Loader2 } from "lucide-react";
-import { Button, Input } from "@/components/ui";
-import { Schedule, Doctor, DAY_NAMES, DAY_NAMES_SHORT } from "@/lib/api/schedules.api";
+import { Button } from "@/components/ui";
+import { Doctor, DAY_NAMES_SHORT } from "@/lib/api/slots.api";
 
-const scheduleSchema = z.object({
+const bulkSlotSchema = z.object({
   doctorId: z.string().min(1, "Doctor is required"),
-  dayOfWeek: z.number().min(0).max(6),
+  days: z.array(z.number().min(0).max(6)).min(1, "Select at least one day"),
   startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, "Invalid time format"),
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, "Invalid time format"),
-  slotDuration: z.number().min(5).max(120),
   bufferTime: z.number().min(0).max(60),
   isActive: z.boolean(),
 });
 
-type ScheduleFormData = z.infer<typeof scheduleSchema>;
+type BulkSlotFormData = z.infer<typeof bulkSlotSchema>;
 
-interface ScheduleModalProps {
+interface BulkSlotModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: ScheduleFormData) => Promise<void>;
-  schedule?: Schedule | null;
+  onSubmit: (data: BulkSlotFormData) => Promise<void>;
   doctors: Doctor[];
   isLoading?: boolean;
 }
 
-export function ScheduleModal({
+const WEEKDAYS = [1, 2, 3, 4, 5]; // Mon-Fri
+
+export function BulkSlotModal({
   isOpen,
   onClose,
   onSubmit,
-  schedule,
   doctors,
   isLoading = false,
-}: ScheduleModalProps) {
-  const isEditing = !!schedule;
-
+}: BulkSlotModalProps) {
   const {
     register,
     handleSubmit,
@@ -46,44 +42,47 @@ export function ScheduleModal({
     watch,
     setValue,
     formState: { errors },
-  } = useForm<ScheduleFormData>({
-    resolver: zodResolver(scheduleSchema),
+  } = useForm<BulkSlotFormData>({
+    resolver: zodResolver(bulkSlotSchema),
     defaultValues: {
       doctorId: "",
-      dayOfWeek: 1,
+      days: WEEKDAYS,
       startTime: "09:00",
-      endTime: "17:00",
-      slotDuration: 30,
-      bufferTime: 10,
+      endTime: "09:30",
+      bufferTime: 5,
       isActive: true,
     },
   });
 
-  useEffect(() => {
-    if (schedule) {
-      setValue("doctorId", schedule.doctorId);
-      setValue("dayOfWeek", schedule.dayOfWeek);
-      setValue("startTime", schedule.startTime);
-      setValue("endTime", schedule.endTime);
-      setValue("slotDuration", schedule.slotDuration);
-      setValue("bufferTime", schedule.bufferTime);
-      setValue("isActive", schedule.isActive);
+  const selectedDays = watch("days");
+
+  const toggleDay = (day: number) => {
+    const current = selectedDays || [];
+    if (current.includes(day)) {
+      setValue(
+        "days",
+        current.filter((d) => d !== day)
+      );
     } else {
-      reset({
-        doctorId: doctors.length === 1 ? doctors[0].id : "",
-        dayOfWeek: 1,
-        startTime: "09:00",
-        endTime: "17:00",
-        slotDuration: 30,
-        bufferTime: 10,
-        isActive: true,
-      });
+      setValue("days", [...current, day]);
     }
-  }, [schedule, doctors, setValue, reset]);
+  };
+
+  const selectWeekdays = () => {
+    setValue("days", WEEKDAYS);
+  };
+
+  const selectAll = () => {
+    setValue("days", [0, 1, 2, 3, 4, 5, 6]);
+  };
+
+  const clearAll = () => {
+    setValue("days", []);
+  };
 
   if (!isOpen) return null;
 
-  const handleFormSubmit = async (data: ScheduleFormData) => {
+  const handleFormSubmit = async (data: BulkSlotFormData) => {
     await onSubmit(data);
     reset();
     onClose();
@@ -95,7 +94,7 @@ export function ScheduleModal({
       <div className="relative z-10 w-full max-w-md bg-white rounded-xl shadow-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            {isEditing ? "Edit Schedule" : "Add Schedule"}
+            Create Bulk Slots
           </h2>
           <button
             onClick={onClose}
@@ -105,6 +104,10 @@ export function ScheduleModal({
           </button>
         </div>
 
+        <p className="text-sm text-gray-500 mb-4">
+          Create time slots for multiple days at once. Days with overlapping slots will be skipped.
+        </p>
+
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
           {/* Doctor Select */}
           <div>
@@ -113,8 +116,7 @@ export function ScheduleModal({
             </label>
             <select
               {...register("doctorId")}
-              disabled={isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
             >
               <option value="">Select a doctor</option>
               {doctors.map((doctor) => (
@@ -128,24 +130,54 @@ export function ScheduleModal({
             )}
           </div>
 
-          {/* Day of Week */}
+          {/* Days Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Day of Week
-            </label>
-            <select
-              {...register("dayOfWeek", { valueAsNumber: true })}
-              disabled={isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100"
-            >
-              {DAY_NAMES.map((day, index) => (
-                <option key={index} value={index}>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Select Days
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={selectWeekdays}
+                  className="text-xs text-[#00BCD4] hover:underline"
+                >
+                  Weekdays
+                </button>
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  className="text-xs text-[#00BCD4] hover:underline"
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-xs text-gray-500 hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {DAY_NAMES_SHORT.map((day, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => toggleDay(index)}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                    selectedDays?.includes(index)
+                      ? "bg-[#00BCD4] text-white border-[#00BCD4]"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-[#00BCD4]"
+                  }`}
+                >
                   {day}
-                </option>
+                </button>
               ))}
-            </select>
-            {errors.dayOfWeek && (
-              <p className="text-sm text-red-500 mt-1">{errors.dayOfWeek.message}</p>
+            </div>
+            {errors.days && (
+              <p className="text-sm text-red-500 mt-1">{errors.days.message}</p>
             )}
           </div>
 
@@ -179,38 +211,19 @@ export function ScheduleModal({
             </div>
           </div>
 
-          {/* Slot Duration & Buffer */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Slot Duration (min)
-              </label>
-              <input
-                type="number"
-                {...register("slotDuration", { valueAsNumber: true })}
-                min={5}
-                max={120}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
-              />
-              {errors.slotDuration && (
-                <p className="text-sm text-red-500 mt-1">{errors.slotDuration.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Buffer Time (min)
-              </label>
-              <input
-                type="number"
-                {...register("bufferTime", { valueAsNumber: true })}
-                min={0}
-                max={60}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
-              />
-              {errors.bufferTime && (
-                <p className="text-sm text-red-500 mt-1">{errors.bufferTime.message}</p>
-              )}
-            </div>
+          {/* Buffer Time */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Buffer Time (minutes)
+            </label>
+            <input
+              type="number"
+              {...register("bufferTime", { valueAsNumber: true })}
+              min={0}
+              max={60}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
+            />
+            <p className="text-xs text-gray-400 mt-1">Time gap after each slot ends</p>
           </div>
 
           {/* Active Toggle */}
@@ -232,10 +245,10 @@ export function ScheduleModal({
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
+                  Creating...
                 </>
               ) : (
-                isEditing ? "Update" : "Create"
+                "Create Slots"
               )}
             </Button>
           </div>

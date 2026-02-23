@@ -1,26 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui";
 
-interface DeleteScheduleModalProps {
+interface DeleteSlotModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  scheduleInfo: string;
+  slotInfo: string;
   isLoading?: boolean;
-  hasAppointments?: boolean;
 }
 
-export function DeleteScheduleModal({
+export function DeleteSlotModal({
   isOpen,
   onClose,
   onConfirm,
-  scheduleInfo,
+  slotInfo,
   isLoading = false,
-  hasAppointments = false,
-}: DeleteScheduleModalProps) {
+}: DeleteSlotModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -28,7 +25,7 @@ export function DeleteScheduleModal({
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div className="relative z-10 w-full max-w-md bg-white rounded-xl shadow-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Delete Schedule</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Delete Slot</h2>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded-full transition-colors"
@@ -43,19 +40,11 @@ export function DeleteScheduleModal({
           </div>
           <div>
             <p className="text-sm text-gray-700">
-              Are you sure you want to delete this schedule?
+              Are you sure you want to delete this slot?
             </p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{scheduleInfo}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{slotInfo}</p>
           </div>
         </div>
-
-        {hasAppointments && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-            <p className="text-sm text-yellow-800">
-              This doctor has upcoming appointments. You cannot delete this schedule until those appointments are completed or cancelled.
-            </p>
-          </div>
-        )}
 
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={onClose}>
@@ -65,7 +54,8 @@ export function DeleteScheduleModal({
             type="button"
             variant="danger"
             onClick={onConfirm}
-            disabled={isLoading || hasAppointments}
+            disabled={isLoading}
+            className="bg-red-600 hover:bg-red-700"
           >
             {isLoading ? (
               <>
