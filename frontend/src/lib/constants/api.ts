@@ -15,4 +15,5 @@ export const API_ENDPOINTS = {
   APPOINTMENTS: '/api/appointments',
   PATIENTS: '/api/patients',
   ANALYTICS: '/api/analytics',
+  SCHEDULES: '/api/schedules',
 };
