@@ -198,7 +198,7 @@ export class DoctorsService {
     });
 
     // Generate available slots from each slot definition
-    const availableSlots: Array<{ startTime: string; endTime: string }> = [];
+    const availableSlots: Array<{ startTime: string; endTime: string; isBooked?: boolean }> = [];
 
     for (const slot of slots) {
       const slotAvailable = this.calculateAvailableSlots(
@@ -223,8 +223,8 @@ export class DoctorsService {
     serviceDuration: number,
     bufferTime: number,
     existingAppointments: Array<{ startTime: string; endTime: string }>,
-  ): Array<{ startTime: string; endTime: string }> {
-    const slots: Array<{ startTime: string; endTime: string }> = [];
+  ): Array<{ startTime: string; endTime: string; isBooked?: boolean }> {
+    const slots: Array<{ startTime: string; endTime: string; isBooked?: boolean }> = [];
     
     // Validate time format
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
@@ -270,9 +270,7 @@ export class DoctorsService {
         );
       });
       
-      if (!hasConflict) {
-        slots.push({ startTime: slotStart, endTime: slotEnd });
-      }
+      slots.push({ startTime: slotStart, endTime: slotEnd, isBooked: hasConflict });
       
       // Move to next slot (including buffer time)
       currentMin += serviceDuration + bufferTime;
