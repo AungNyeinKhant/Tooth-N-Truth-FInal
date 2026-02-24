@@ -286,7 +286,7 @@ export class WalkinsService {
   }
 
   /**
-   * Get walk-in queue for a branch
+   * Get walk-in queue for a branch (all history or filtered)
    */
   async getQueue(branchId: string, query: QueryWalkInDto, managerId: string) {
     const { status, date, search, page = 1, limit = 20 } = query;
@@ -306,27 +306,28 @@ export class WalkinsService {
       isWalkIn: true,
     };
 
-    // Date filter (default to today)
-    let dateFilter = date || 'today';
-    let startDate: Date;
-    let endDate: Date;
+    // Date filter (optional - if not provided, show all)
+    if (date && date !== 'all') {
+      let startDate: Date;
+      let endDate: Date;
 
-    if (dateFilter === 'today') {
-      startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date();
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date(dateFilter);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(dateFilter);
-      endDate.setHours(23, 59, 59, 999);
+      if (date === 'today') {
+        startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        startDate = new Date(date);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(date);
+        endDate.setHours(23, 59, 59, 999);
+      }
+
+      where.checkInTime = {
+        gte: startDate,
+        lte: endDate,
+      };
     }
-
-    where.checkInTime = {
-      gte: startDate,
-      lte: endDate,
-    };
 
     // Map walk-in status to appointment status
     if (status) {

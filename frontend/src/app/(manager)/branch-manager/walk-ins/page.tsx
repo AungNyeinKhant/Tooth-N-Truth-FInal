@@ -17,7 +17,7 @@ import {
   getWaitTimeColor,
   getStatusColor,
 } from "@/lib/api/walkins.api";
-import { doctorsApi, Doctor } from "@/lib/api/doctors.api";
+import { slotsApi, Doctor } from "@/lib/api/slots.api";
 import { servicesApi, Service } from "@/lib/api/services.api";
 import {
   Plus,
@@ -35,6 +35,7 @@ import {
   Filter,
   MoreVertical,
   ArrowRight,
+  CalendarDays,
 } from "lucide-react";
 import { RegisterWalkInModal } from "./components/register-walkin-modal";
 import { UpdateStatusModal } from "./components/update-status-modal";
@@ -43,6 +44,10 @@ import { ConvertToAppointmentModal } from "./components/convert-to-appointment-m
 export default function WalkInsPage() {
   const { user } = useAuthStore();
   const { addToast } = useUIStore();
+
+  // Get branch ID from user
+  const branchId = (user as any)?.branchManager?.branch?.id;
+  const branchName = (user as any)?.branchManager?.branch?.name || "Your Branch";
 
   // Data state
   const [walkIns, setWalkIns] = useState<WalkIn[]>([]);
@@ -53,11 +58,13 @@ export default function WalkInsPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
 
-  // Filter state - using refs to avoid stale closures
+  // Filter state
   const statusFilterRef = useRef<WalkInStatus | "">("");
   const searchRef = useRef<HTMLInputElement>(null);
+  const dateFilterRef = useRef<string>("all");
   const [statusFilter, setStatusFilter] = useState<WalkInStatus | "">("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState<string>("all");
 
   // Modal state
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -67,45 +74,39 @@ export default function WalkInsPage() {
   const [statusAction, setStatusAction] = useState<WalkInStatus | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-refresh interval
+  // Auto-refresh interval (only for today's data)
   const autoRefreshInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch data
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [walkInsRes, doctorsRes, servicesRes] = await Promise.all([
+      const [walkInsRes, doctorsData, servicesData] = await Promise.all([
         getWalkInQueue({
           status: statusFilterRef.current || undefined,
-          date: "today",
+          date: dateFilterRef.current,
           search: searchQuery || undefined,
           page,
           limit,
         }),
-        doctorsApi.getAll({ status: "active", limit: 50 }),
+        slotsApi.getDoctors(),
         servicesApi.getAll({ status: "active", limit: 50 }),
       ]);
 
       setWalkIns(walkInsRes.data);
       setTotal(walkInsRes.meta.total);
 
-      // Extract doctors from response
-      const doctorsPayload = (doctorsRes.data as any)?.data;
-      const doctorsData = Array.isArray(doctorsPayload?.data)
-        ? doctorsPayload.data
-        : Array.isArray(doctorsPayload)
-        ? doctorsPayload
-        : [];
-      setDoctors(doctorsData);
+      // Set doctors from slots API (already filtered by branch)
+      setDoctors(doctorsData || []);
 
       // Extract services from response
-      const servicesPayload = (servicesRes.data as any)?.data;
-      const servicesData = Array.isArray(servicesPayload?.data)
+      const servicesPayload = (servicesData.data as any)?.data;
+      const servicesDataArray = Array.isArray(servicesPayload?.data)
         ? servicesPayload.data
         : Array.isArray(servicesPayload)
         ? servicesPayload
         : [];
-      setServices(servicesData);
+      setServices(servicesDataArray);
     } catch (error: any) {
       console.error("Error fetching data:", error);
       addToast("Failed to load walk-ins", "error");
@@ -117,22 +118,29 @@ export default function WalkInsPage() {
   useEffect(() => {
     fetchData();
 
-    // Set up auto-refresh every 30 seconds
-    autoRefreshInterval.current = setInterval(() => {
-      fetchData();
-    }, 30000);
+    // Set up auto-refresh every 30 seconds (only when viewing today)
+    if (dateFilter === "today") {
+      autoRefreshInterval.current = setInterval(() => {
+        fetchData();
+      }, 30000);
+    }
 
     return () => {
       if (autoRefreshInterval.current) {
         clearInterval(autoRefreshInterval.current);
       }
     };
-  }, [fetchData]);
+  }, [fetchData, dateFilter]);
 
-  // Update ref when filter changes
+  // Update refs when filter changes
   useEffect(() => {
     statusFilterRef.current = statusFilter;
   }, [statusFilter]);
+
+  useEffect(() => {
+    dateFilterRef.current = dateFilter;
+    setPage(1); // Reset to page 1 when date changes
+  }, [dateFilter]);
 
   // Handlers
   const handleRegisterWalkIn = async (data: CreateWalkInRequest) => {
@@ -208,13 +216,20 @@ export default function WalkInsPage() {
     setPage(1);
   };
 
-  const branchName =
-    (user as any)?.branchManager?.branch?.name || "Your Branch";
-
-  // Stats
+  // Stats (only for today)
   const waitingCount = walkIns.filter((w) => w.displayStatus === "WAITING").length;
   const inProgressCount = walkIns.filter((w) => w.displayStatus === "IN_PROGRESS").length;
   const completedCount = walkIns.filter((w) => w.displayStatus === "COMPLETED").length;
+  const cancelledCount = walkIns.filter((w) => w.displayStatus === "CANCELLED").length;
+
+  // Status tabs
+  const statusTabs = [
+    { key: "", label: "All" },
+    { key: "WAITING", label: "Waiting" },
+    { key: "IN_PROGRESS", label: "In Progress" },
+    { key: "COMPLETED", label: "Completed" },
+    { key: "CANCELLED", label: "Cancelled" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -223,9 +238,6 @@ export default function WalkInsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Walk-in Queue</h1>
           <p className="text-sm text-gray-500">{branchName}</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Auto-refreshes every 30 seconds
-          </p>
         </div>
         <button
           onClick={() => setIsRegisterModalOpen(true)}
@@ -236,42 +248,77 @@ export default function WalkInsPage() {
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Clock className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{waitingCount}</p>
-              <p className="text-xs text-gray-500">Waiting</p>
-            </div>
-          </div>
+      {/* Date Filter Tabs */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+          <button
+            onClick={() => setDateFilter("today")}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              dateFilter === "today"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Today
+          </button>
+          <button
+            onClick={() => setDateFilter("all")}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              dateFilter === "all"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            All History
+          </button>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Play className="w-5 h-5 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{inProgressCount}</p>
-              <p className="text-xs text-gray-500">In Progress</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{completedCount}</p>
-              <p className="text-xs text-gray-500">Completed</p>
-            </div>
-          </div>
-        </div>
+        
+        {dateFilter === "today" && (
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <RefreshCw className="w-3 h-3" />
+            Auto-refreshes every 30 seconds
+          </p>
+        )}
       </div>
+
+      {/* Stats Cards - Only show for today view */}
+      {dateFilter === "today" && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Clock className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{waitingCount}</p>
+                <p className="text-xs text-gray-500">Waiting</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <Play className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{inProgressCount}</p>
+                <p className="text-xs text-gray-500">In Progress</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{completedCount}</p>
+                <p className="text-xs text-gray-500">Completed</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -299,24 +346,24 @@ export default function WalkInsPage() {
           </div>
         </div>
 
-        {/* Status Filter */}
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as WalkInStatus | "");
-              setPage(1);
-            }}
-            className="appearance-none px-3 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
-          >
-            <option value="">All Status</option>
-            <option value="WAITING">Waiting</option>
-            <option value="ASSIGNED">Assigned</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+        {/* Status Tabs */}
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+          {statusTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setStatusFilter(tab.key as WalkInStatus | "");
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                statusFilter === tab.key
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Refresh */}

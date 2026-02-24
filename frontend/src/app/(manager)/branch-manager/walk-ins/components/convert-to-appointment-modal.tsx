@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X, Loader2, Calendar, ArrowRight } from "lucide-react";
 import {
   ConvertToAppointmentRequest,
   WalkIn,
 } from "@/lib/api/walkins.api";
-import { Doctor } from "@/lib/api/doctors.api";
+import { Doctor, Slot, DAY_NAMES, slotsApi } from "@/lib/api/slots.api";
 
 interface ConvertToAppointmentModalProps {
   isOpen: boolean;
@@ -28,18 +28,11 @@ export function ConvertToAppointmentModal({
   const [formData, setFormData] = useState({
     doctorId: "",
     appointmentDate: "",
-    startTime: "",
+    slotId: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Generate time slots from 8:00 to 18:00
-  const timeSlots: string[] = [];
-  for (let hour = 8; hour <= 18; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-      timeSlots.push(time);
-    }
-  }
+  const [availableSlots, setAvailableSlots] = useState<Slot[]>([]);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -54,18 +47,51 @@ export function ConvertToAppointmentModal({
     return maxDate.toISOString().split("T")[0];
   };
 
+  // Fetch available slots when date changes
+  const fetchAvailableSlots = useCallback(async (date: string) => {
+    if (!date) {
+      setAvailableSlots([]);
+      return;
+    }
+    setIsLoadingSlots(true);
+    try {
+      const slots = await slotsApi.getAvailableSlots(date);
+      setAvailableSlots(slots || []);
+    } catch (error) {
+      console.error("Error fetching slots:", error);
+      setAvailableSlots([]);
+    } finally {
+      setIsLoadingSlots(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (isOpen && walkIn) {
-      const today = new Date();
-      today.setDate(today.getDate() + 1); // Default to tomorrow
+      // Default to today + 1 day
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateStr = tomorrow.toISOString().split("T")[0];
+      
       setFormData({
         doctorId: walkIn.doctorId || "",
-        appointmentDate: today.toISOString().split("T")[0],
-        startTime: "09:00",
+        appointmentDate: dateStr,
+        slotId: "",
       });
       setErrors({});
+      
+      // Fetch slots for default date
+      fetchAvailableSlots(dateStr);
     }
-  }, [isOpen, walkIn]);
+  }, [isOpen, walkIn, fetchAvailableSlots]);
+
+  // Fetch slots when date changes
+  useEffect(() => {
+    if (formData.appointmentDate) {
+      fetchAvailableSlots(formData.appointmentDate);
+      // Clear slot selection when date changes
+      setFormData((prev) => ({ ...prev, slotId: "" }));
+    }
+  }, [formData.appointmentDate, fetchAvailableSlots]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -85,8 +111,8 @@ export function ConvertToAppointmentModal({
       }
     }
 
-    if (!formData.startTime) {
-      newErrors.startTime = "Please select a time";
+    if (!formData.slotId) {
+      newErrors.slotId = "Please select an available time slot";
     }
 
     setErrors(newErrors);
@@ -97,16 +123,27 @@ export function ConvertToAppointmentModal({
     e.preventDefault();
     if (!validate()) return;
 
+    // Find the selected slot to get time
+    const selectedSlot = availableSlots.find((s) => s.id === formData.slotId);
+    if (!selectedSlot) {
+      return;
+    }
+
     const submitData: ConvertToAppointmentRequest = {
       doctorId: formData.doctorId,
       appointmentDate: formData.appointmentDate,
-      startTime: formData.startTime,
+      startTime: selectedSlot.startTime,
     };
 
     await onSubmit(submitData);
   };
 
   if (!isOpen || !walkIn) return null;
+
+  // Filter slots by selected doctor
+  const filteredSlots = formData.doctorId
+    ? availableSlots.filter((s) => s.doctorId === formData.doctorId)
+    : availableSlots;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -159,8 +196,7 @@ export function ConvertToAppointmentModal({
             </div>
 
             <p className="text-sm text-gray-600">
-              Convert this walk-in to a scheduled appointment. The token number
-              will be removed.
+              Select a date and choose an available time slot for this appointment.
             </p>
 
             {/* Doctor */}
@@ -214,29 +250,52 @@ export function ConvertToAppointmentModal({
               )}
             </div>
 
-            {/* Time */}
+            {/* Available Slots */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Start Time
+                Available Time Slot <span className="text-red-500">*</span>
               </label>
-              <select
-                value={formData.startTime}
-                onChange={(e) =>
-                  setFormData({ ...formData, startTime: e.target.value })
-                }
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] ${
-                  errors.startTime ? "border-red-500" : "border-gray-300"
-                }`}
-              >
-                {timeSlots.map((time) => (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                ))}
-              </select>
-              {errors.startTime && (
-                <p className="text-xs text-red-500 mt-1">{errors.startTime}</p>
+              {isLoadingSlots ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                  <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                  <span className="text-sm text-gray-500">Loading slots...</span>
+                </div>
+              ) : !formData.appointmentDate ? (
+                <div className="px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-500">
+                  Select a date to see available slots
+                </div>
+              ) : !formData.doctorId ? (
+                <div className="px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-500">
+                  Select a doctor to see available slots
+                </div>
+              ) : filteredSlots.length === 0 ? (
+                <div className="px-3 py-2 border border-yellow-300 rounded-lg bg-yellow-50 text-sm text-yellow-700">
+                  No available slots for this doctor on this date
+                </div>
+              ) : (
+                <select
+                  value={formData.slotId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, slotId: e.target.value })
+                  }
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] ${
+                    errors.slotId ? "border-red-500" : "border-gray-300"
+                  }`}
+                >
+                  <option value="">Select a time slot</option>
+                  {filteredSlots.map((slot) => (
+                    <option key={slot.id} value={slot.id}>
+                      {slot.startTime} - {slot.endTime} (Dr. {slot.doctor.firstName} {slot.doctor.lastName.charAt(0)}.)
+                    </option>
+                  ))}
+                </select>
               )}
+              {errors.slotId && (
+                <p className="text-xs text-red-500 mt-1">{errors.slotId}</p>
+              )}
+              <p className="text-xs text-gray-400 mt-1">
+                Only showing available slots (already booked slots are hidden)
+              </p>
             </div>
 
             {/* Actions */}

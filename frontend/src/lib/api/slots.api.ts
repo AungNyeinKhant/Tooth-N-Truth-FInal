@@ -11,6 +11,7 @@ export interface Slot {
   endTime: string;
   bufferTime: number;
   isActive: boolean;
+  isBooked?: boolean; // For available slots - true if slot is already booked
   doctor: {
     id: string;
     firstName: string;
@@ -126,6 +127,22 @@ export const slotsApi = {
   // Bulk create slots
   bulkCreateSlots: async (data: BulkSlotData) => {
     const response = await apiClient.post(`${API_ENDPOINTS.SLOTS}/bulk`, data);
+    return response.data?.data ?? response.data;
+  },
+
+  // Get available slots for a specific date (for booking)
+  getAvailableSlots: async (date: string) => {
+    const response = await apiClient.get(
+      `${API_ENDPOINTS.SLOTS}/available?date=${date}`
+    );
+    return response.data?.data ?? response.data;
+  },
+
+  // Get available slots for patients (public endpoint)
+  getPublicAvailableSlots: async (date: string, branchId: string) => {
+    const response = await apiClient.get(
+      `${API_ENDPOINTS.SLOTS}/public/available?date=${date}&branchId=${branchId}`
+    );
     return response.data?.data ?? response.data;
   },
 };

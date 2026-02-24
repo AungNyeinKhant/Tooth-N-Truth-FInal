@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Loader2, UserPlus } from "lucide-react";
 import { CreateWalkInRequest } from "@/lib/api/walkins.api";
-import { Doctor } from "@/lib/api/doctors.api";
+import { Doctor, slotsApi, Slot, DAY_NAMES } from "@/lib/api/slots.api";
 import { Service } from "@/lib/api/services.api";
-import { slotsApi, Slot, DAY_NAMES } from "@/lib/api/slots.api";
 
 interface RegisterWalkInModalProps {
   isOpen: boolean;
@@ -37,7 +36,7 @@ export function RegisterWalkInModal({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
 
-  // Fetch slots when doctor is selected
+      // Fetch available slots for today when doctor is selected
   const fetchSlots = useCallback(async (doctorId: string) => {
     if (!doctorId) {
       setSlots([]);
@@ -45,15 +44,18 @@ export function RegisterWalkInModal({
     }
     setIsLoadingSlots(true);
     try {
-      const result = await slotsApi.getSlots({ doctorId, limit: 50 });
-      // Filter to only active slots and sort by day then time
-      const activeSlots = result.items
-        .filter((s) => s.isActive)
-        .sort((a, b) => {
-          if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
-          return a.startTime.localeCompare(b.startTime);
-        });
-      setSlots(activeSlots);
+      // Get today's date
+      const today = new Date().toISOString().split("T")[0];
+      
+      // Fetch available slots for today
+      const availableSlots: Slot[] = await slotsApi.getAvailableSlots(today);
+      
+      // Filter to only slots for the selected doctor
+      const doctorSlots = (availableSlots || [])
+        .filter((s: Slot) => s.doctorId === doctorId && !s.isBooked)
+        .sort((a: Slot, b: Slot) => a.startTime.localeCompare(b.startTime));
+      
+      setSlots(doctorSlots);
     } catch (error) {
       console.error("Error fetching slots:", error);
       setSlots([]);
@@ -311,13 +313,13 @@ export function RegisterWalkInModal({
                   <option value="">Use current time (walk-in)</option>
                   {slots.map((slot) => (
                     <option key={slot.id} value={slot.id}>
-                      {DAY_NAMES[slot.dayOfWeek]} • {slot.startTime} - {slot.endTime}
+                      {slot.startTime} - {slot.endTime}
                     </option>
                   ))}
                 </select>
               )}
               <p className="text-xs text-gray-400 mt-1">
-                Choose a slot for scheduled time, or leave empty to use current time
+                Available slots for today. Choose a slot or leave empty for immediate walk-in.
               </p>
             </div>
 

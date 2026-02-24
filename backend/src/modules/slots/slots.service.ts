@@ -365,6 +365,99 @@ export class SlotsService {
   }
 
   /**
+   * Get available slots for a specific date
+   * Excludes slots that have CONFIRMED appointments at that time
+   */
+  async getAvailableSlots(branchId: string, date: string) {
+    // Parse the date
+    const targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+    }
+
+    const dayOfWeek = targetDate.getDay();
+
+    // Get start and end of the target date
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Get all active slots for this branch on this day of week
+    const slots = await this.prisma.doctorSlot.findMany({
+      where: {
+        branchId,
+        dayOfWeek,
+        isActive: true,
+      },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+      },
+      orderBy: [{ doctor: { lastName: 'asc' } }, { startTime: 'asc' }],
+    });
+
+    // Get all CONFIRMED appointments for this branch on this date
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        branchId,
+        appointmentDate: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        status: 'CONFIRMED',
+      },
+      select: {
+        doctorId: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    // Build a map of booked time slots per doctor
+    const bookedSlots: Record<string, { startTime: string; endTime: string }[]> = {};
+    for (const apt of appointments) {
+      if (!bookedSlots[apt.doctorId]) {
+        bookedSlots[apt.doctorId] = [];
+      }
+      bookedSlots[apt.doctorId].push({
+        startTime: apt.startTime,
+        endTime: apt.endTime,
+      });
+    }
+
+    // Filter out slots that overlap with existing appointments
+    const availableSlots = slots
+      .map((slot) => {
+        const doctorBookings = bookedSlots[slot.id] || [];
+        
+        // Check if this slot overlaps with any booking
+        const isBooked = doctorBookings.some((booking) =>
+          this.hasTimeOverlap(
+            slot.startTime,
+            slot.endTime,
+            booking.startTime,
+            booking.endTime,
+          ),
+        );
+
+        return {
+          ...slot,
+          isBooked,
+        };
+      })
+      .filter((slot) => !slot.isBooked);
+
+    return availableSlots;
+  }
+
+  /**
    * Helper: Check if two time ranges overlap
    * Overlap if: start1 < end2 AND end1 > start2
    */

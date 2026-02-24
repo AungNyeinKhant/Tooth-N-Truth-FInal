@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -57,6 +58,32 @@ export class SlotsController {
   @ApiResponse({ status: 403, description: 'Forbidden - Branch Manager access required' })
   async getDoctors(@CurrentUser('branchId') branchId: string) {
     return this.slotsService.getDoctors(branchId);
+  }
+
+  @Get('available')
+  @ApiOperation({ summary: 'Get available slots for a specific date (branch manager)' })
+  @ApiResponse({ status: 200, description: 'List of available slots' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async getAvailableSlots(
+    @Query('date') date: string,
+    @CurrentUser('branchId') branchId: string,
+  ) {
+    return this.slotsService.getAvailableSlots(branchId, date);
+  }
+
+  // Public endpoint for patients (no auth required, but needs branchId)
+  @Get('public/available')
+  @ApiOperation({ summary: 'Get available slots for patients to book (public)' })
+  @ApiResponse({ status: 200, description: 'List of available slots' })
+  async getPublicAvailableSlots(
+    @Query('date') date: string,
+    @Query('branchId') branchId: string,
+  ) {
+    if (!branchId) {
+      throw new BadRequestException('branchId is required');
+    }
+    return this.slotsService.getAvailableSlots(branchId, date);
   }
 
   @Get(':id')

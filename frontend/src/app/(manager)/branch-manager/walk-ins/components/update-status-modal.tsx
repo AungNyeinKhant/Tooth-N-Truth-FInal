@@ -7,7 +7,7 @@ import {
   WalkIn,
   WalkInStatus,
 } from "@/lib/api/walkins.api";
-import { Doctor } from "@/lib/api/doctors.api";
+import { Doctor } from "@/lib/api/slots.api";
 
 interface UpdateStatusModalProps {
   isOpen: boolean;
