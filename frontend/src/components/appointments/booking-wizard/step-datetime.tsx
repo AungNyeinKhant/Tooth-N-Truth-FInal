@@ -8,6 +8,7 @@ interface StepDateTimeProps {
   availableSlots: Array<{
     startTime: string;
     endTime: string;
+    isBooked?: boolean;
   }>;
   isLoading: boolean;
 }
@@ -97,14 +98,23 @@ export default function StepDateTime({ availableSlots, isLoading }: StepDateTime
               {availableSlots.map((slot, index) => (
                 <button
                   key={index}
-                  onClick={() => setSlot(slot)}
+                  onClick={() => !slot.isBooked && setSlot(slot)}
+                  disabled={slot.isBooked}
                   className={`p-3 rounded-lg text-center transition-all ${
                     selectedSlot?.startTime === slot.startTime
-                      ? 'bg-primary-cyan text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-text-navy'
+                      ? "bg-primary-cyan text-white"
+                      : slot.isBooked
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
+                      : "bg-gray-100 hover:bg-gray-200 text-text-navy"
                   }`}
                 >
-                  <div className="text-sm font-semibold">{slot.startTime}</div>
+                  <div
+                    className={`text-sm font-semibold ${
+                      slot.isBooked ? "line-through" : ""
+                    }`}
+                  >
+                    {slot.startTime}
+                  </div>
                 </button>
               ))}
             </div>

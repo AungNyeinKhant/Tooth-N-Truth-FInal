@@ -110,10 +110,9 @@ export class SlotsService {
       throw new BadRequestException('Start time must be before end time');
     }
 
-    // Check for overlapping slots for the same doctor on the same day
+    // Check for overlapping slots in the same branch on the same day
     const existingSlots = await this.prisma.doctorSlot.findMany({
       where: {
-        doctorId: dto.doctorId,
         branchId,
         dayOfWeek: dto.dayOfWeek,
         isActive: true,
@@ -123,7 +122,7 @@ export class SlotsService {
     for (const existing of existingSlots) {
       if (this.hasTimeOverlap(dto.startTime, dto.endTime, existing.startTime, existing.endTime)) {
         throw new ConflictException(
-          `Slot overlaps with existing slot (${existing.startTime} - ${existing.endTime}) for this doctor on the same day`,
+          `Slot overlaps with existing slot (${existing.startTime} - ${existing.endTime}) in this branch on the same day`,
         );
       }
     }
@@ -168,11 +167,10 @@ export class SlotsService {
       throw new BadRequestException('Start time must be before end time');
     }
 
-    // Check for overlapping slots (excluding current one)
+    // Check for overlapping slots in the same branch (excluding current one)
     if (dto.startTime || dto.endTime) {
       const existingSlots = await this.prisma.doctorSlot.findMany({
         where: {
-          doctorId: slot.doctorId,
           branchId,
           dayOfWeek: slot.dayOfWeek,
           isActive: true,
@@ -183,7 +181,7 @@ export class SlotsService {
       for (const existing of existingSlots) {
         if (this.hasTimeOverlap(startTime, endTime, existing.startTime, existing.endTime)) {
           throw new ConflictException(
-            `Updated slot overlaps with existing slot (${existing.startTime} - ${existing.endTime}) for this doctor on the same day`,
+            `Updated slot overlaps with existing slot (${existing.startTime} - ${existing.endTime}) in this branch on the same day`,
           );
         }
       }
@@ -253,10 +251,9 @@ export class SlotsService {
     // Get unique days
     const uniqueDays = [...new Set(dto.days)];
 
-    // Check for existing slots on these days that would overlap
+    // Check for existing slots on these days that would overlap (any doctor in this branch)
     const existingSlots = await this.prisma.doctorSlot.findMany({
       where: {
-        doctorId: dto.doctorId,
         branchId,
         dayOfWeek: { in: uniqueDays },
         isActive: true,
@@ -368,9 +365,12 @@ export class SlotsService {
    * Get available slots for a specific date
    * Excludes slots that have CONFIRMED appointments at that time
    */
-  async getAvailableSlots(branchId: string, date: string) {
-    // Parse the date
-    const targetDate = new Date(date);
+  async getAvailableSlots(branchId: string, dateString: string) {
+    // Parse date string directly (YYYY-MM-DD format from frontend)
+    // Don't use new Date() which interprets as UTC and causes timezone issues
+    const [year, month, day] = dateString.split('-').map(Number);
+    const targetDate = new Date(year, month - 1, day); // Local time
+    
     if (isNaN(targetDate.getTime())) {
       throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
     }
@@ -435,7 +435,7 @@ export class SlotsService {
     // Filter out slots that overlap with existing appointments
     const availableSlots = slots
       .map((slot) => {
-        const doctorBookings = bookedSlots[slot.id] || [];
+        const doctorBookings = bookedSlots[slot.doctorId] || [];
         
         // Check if this slot overlaps with any booking
         const isBooked = doctorBookings.some((booking) =>
@@ -451,8 +451,7 @@ export class SlotsService {
           ...slot,
           isBooked,
         };
-      })
-      .filter((slot) => !slot.isBooked);
+      });
 
     return availableSlots;
   }

@@ -130,8 +130,11 @@ export class DoctorsService {
   }
 
   async getAvailableSlots(doctorId: string, dateString: string, serviceId: string) {
-    // Parse and validate date
-    const date = new Date(dateString);
+    // Parse date string directly (YYYY-MM-DD format from frontend)
+    // Don't use new Date() which interprets as UTC and causes timezone issues
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day); // Local time
+    
     if (isNaN(date.getTime())) {
       throw new BadRequestException('Invalid date format');
     }

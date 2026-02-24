@@ -52,7 +52,7 @@ export function RegisterWalkInModal({
       
       // Filter to only slots for the selected doctor
       const doctorSlots = (availableSlots || [])
-        .filter((s: Slot) => s.doctorId === doctorId && !s.isBooked)
+        .filter((s: Slot) => s.doctorId === doctorId)
         .sort((a: Slot, b: Slot) => a.startTime.localeCompare(b.startTime));
       
       setSlots(doctorSlots);
@@ -312,8 +312,13 @@ export function RegisterWalkInModal({
                 >
                   <option value="">Use current time (walk-in)</option>
                   {slots.map((slot) => (
-                    <option key={slot.id} value={slot.id}>
-                      {slot.startTime} - {slot.endTime}
+                    <option
+                      key={slot.id}
+                      value={slot.id}
+                      disabled={slot.isBooked}
+                    >
+                      {slot.startTime} - {slot.endTime}{" "}
+                      {slot.isBooked ? "(Booked)" : ""}
                     </option>
                   ))}
                 </select>
