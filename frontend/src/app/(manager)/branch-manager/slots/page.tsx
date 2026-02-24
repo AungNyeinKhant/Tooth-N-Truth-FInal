@@ -127,6 +127,15 @@ export default function SlotsPage() {
     }
   };
 
+  // Unified handler for the modal
+  const handleSlotSubmit = async (data: CreateSlotData | UpdateSlotData) => {
+    if (editingSlot) {
+      await handleUpdateSlot(data as UpdateSlotData);
+    } else {
+      await handleCreateSlot(data as CreateSlotData);
+    }
+  };
+
   const handleDeleteSlot = async () => {
     if (!deletingSlot) return;
     setIsSubmitting(true);
@@ -394,7 +403,7 @@ export default function SlotsPage() {
           setIsSlotModalOpen(false);
           setEditingSlot(null);
         }}
-        onSubmit={editingSlot ? handleUpdateSlot : handleCreateSlot}
+        onSubmit={handleSlotSubmit}
         slot={editingSlot}
         doctors={doctors}
         isLoading={isSubmitting}

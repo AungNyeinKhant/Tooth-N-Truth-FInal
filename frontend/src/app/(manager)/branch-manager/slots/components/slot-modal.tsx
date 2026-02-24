@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,7 +8,8 @@ import { X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { Slot, Doctor, DAY_NAMES } from "@/lib/api/slots.api";
 
-const slotSchema = z.object({
+// Schema for creating a new slot (all fields required)
+const createSlotSchema = z.object({
   doctorId: z.string().min(1, "Doctor is required"),
   dayOfWeek: z.number().min(0).max(6),
   startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, "Invalid time format"),
@@ -17,12 +18,21 @@ const slotSchema = z.object({
   isActive: z.boolean(),
 });
 
-type SlotFormData = z.infer<typeof slotSchema>;
+// Schema for updating an existing slot (only editable fields)
+const updateSlotSchema = z.object({
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, "Invalid time format"),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/, "Invalid time format"),
+  bufferTime: z.number().min(0).max(60),
+  isActive: z.boolean(),
+});
+
+type CreateSlotFormData = z.infer<typeof createSlotSchema>;
+type UpdateSlotFormData = z.infer<typeof updateSlotSchema>;
 
 interface SlotModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: SlotFormData) => Promise<void>;
+  onSubmit: (data: CreateSlotFormData | UpdateSlotFormData) => Promise<void>;
   slot?: Slot | null;
   doctors: Doctor[];
   isLoading?: boolean;
@@ -38,14 +48,15 @@ export function SlotModal({
 }: SlotModalProps) {
   const isEditing = !!slot;
 
+  // Form always has all fields for UI purposes, but validation schema changes based on mode
   const {
     register,
     handleSubmit,
     reset,
     setValue,
     formState: { errors },
-  } = useForm<SlotFormData>({
-    resolver: zodResolver(slotSchema),
+  } = useForm<CreateSlotFormData>({
+    resolver: zodResolver(isEditing ? updateSlotSchema as any : createSlotSchema),
     defaultValues: {
       doctorId: "",
       dayOfWeek: 1,
@@ -78,8 +89,20 @@ export function SlotModal({
 
   if (!isOpen) return null;
 
-  const handleFormSubmit = async (data: SlotFormData) => {
-    await onSubmit(data);
+  const handleFormSubmit = async (data: CreateSlotFormData) => {
+    if (isEditing) {
+      // When editing, only send the editable fields
+      const updateData: UpdateSlotFormData = {
+        startTime: data.startTime,
+        endTime: data.endTime,
+        bufferTime: data.bufferTime,
+        isActive: data.isActive,
+      };
+      await onSubmit(updateData);
+    } else {
+      // When creating, send all fields
+      await onSubmit(data);
+    }
     reset();
     onClose();
   };
@@ -101,11 +124,14 @@ export function SlotModal({
         </div>
 
         <p className="text-sm text-gray-500 mb-4">
-          Create a time slot for a specific doctor. Overlapping slots for the same doctor are not allowed.
+          {isEditing 
+            ? "Edit the time slot. Doctor and day cannot be changed."
+            : "Create a time slot for a specific doctor. Overlapping slots for the same doctor are not allowed."
+          }
         </p>
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-          {/* Doctor Select */}
+          {/* Doctor Select - only shown when creating */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Doctor
@@ -113,7 +139,7 @@ export function SlotModal({
             <select
               {...register("doctorId")}
               disabled={isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100 disabled:text-gray-500"
             >
               <option value="">Select a doctor</option>
               {doctors.map((doctor) => (
@@ -122,12 +148,14 @@ export function SlotModal({
                 </option>
               ))}
             </select>
-            {errors.doctorId && (
-              <p className="text-sm text-red-500 mt-1">{errors.doctorId.message}</p>
+            {isEditing && slot && (
+              <p className="text-xs text-gray-400 mt-1">
+                Current: Dr. {slot.doctor.firstName} {slot.doctor.lastName}
+              </p>
             )}
           </div>
 
-          {/* Day of Week */}
+          {/* Day of Week - only shown when creating */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Day of Week
@@ -135,7 +163,7 @@ export function SlotModal({
             <select
               {...register("dayOfWeek", { valueAsNumber: true })}
               disabled={isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4] disabled:bg-gray-100 disabled:text-gray-500"
             >
               {DAY_NAMES.map((day, index) => (
                 <option key={index} value={index}>
@@ -143,8 +171,10 @@ export function SlotModal({
                 </option>
               ))}
             </select>
-            {errors.dayOfWeek && (
-              <p className="text-sm text-red-500 mt-1">{errors.dayOfWeek.message}</p>
+            {isEditing && slot && (
+              <p className="text-xs text-gray-400 mt-1">
+                Current: {DAY_NAMES[slot.dayOfWeek]}
+              </p>
             )}
           </div>
 

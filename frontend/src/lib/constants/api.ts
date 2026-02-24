@@ -16,4 +16,5 @@ export const API_ENDPOINTS = {
   PATIENTS: '/api/patients',
   ANALYTICS: '/api/analytics',
   SLOTS: '/api/slots',
+  WALKINS: '/api/walkins',
 };
