@@ -136,6 +136,480 @@ export class AppointmentsService {
     return { items, total };
   }
 
+  /**
+    * Get appointments for branch manager (scoped to their branch)
+    */
+  async getManagerAppointments(
+    branchId: string,
+    query: {
+      status?: string;
+      date?: string;
+      startDate?: string;
+      endDate?: string;
+      doctorId?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{ items: any[]; total: number }> {
+    const {
+      status,
+      date,
+      startDate,
+      endDate,
+      doctorId,
+      search,
+      page = 1,
+      limit = 20,
+    } = query;
+
+    const where: any = {
+      branchId,
+    };
+
+    // Status filter
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
+
+    // Doctor filter
+    if (doctorId) {
+      where.doctorId = doctorId;
+    }
+
+    // Date filter (specific date OR range)
+    if (date) {
+      // Specific date
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(targetDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      where.appointmentDate = {
+        gte: targetDate,
+        lt: nextDate,
+      };
+    } else if (startDate || endDate) {
+      // Date range
+      where.appointmentDate = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        where.appointmentDate.gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.appointmentDate.lte = end;
+      }
+    }
+
+    // Search by patient name
+    if (search) {
+      where.OR = [
+        {
+          patient: {
+            user: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+        { tokenNumber: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where,
+        include: {
+          patient: {
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+            },
+          },
+          doctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              specialization: true,
+            },
+          },
+          branch: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          service: {
+            select: {
+              id: true,
+              name: true,
+              duration: true,
+              price: true,
+            },
+          },
+        },
+        orderBy: [
+          { appointmentDate: 'desc' },
+          { startTime: 'asc' },
+        ],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.appointment.count({ where }),
+    ]);
+
+    return { items, total };
+  }
+
+  /**
+   * Reschedule an appointment (manager only)
+   */
+  async reschedule(
+    id: string,
+    branchId: string,
+    doctorId: string,
+    appointmentDate: string,
+    startTime: string,
+  ) {
+    // Find the appointment
+    const appointment = await this.prisma.appointment.findFirst({
+      where: { id, branchId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Verify doctor belongs to branch
+    const doctor = await this.prisma.doctor.findFirst({
+      where: { id: doctorId, branchId },
+    });
+
+    if (!doctor) {
+      throw new BadRequestException('Doctor does not belong to this branch');
+    }
+
+    // Calculate end time based on service duration
+    const service = await this.prisma.service.findUnique({
+      where: { id: appointment.serviceId },
+    });
+
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    let endHour = startHour;
+    let endMin = startMin + (service?.duration || 30);
+    while (endMin >= 60) {
+      endHour++;
+      endMin -= 60;
+    }
+    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+
+    // Check for conflicts (excluding current appointment)
+    const dateObj = new Date(appointmentDate);
+    dateObj.setHours(0, 0, 0, 0);
+    const nextDate = new Date(dateObj);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    const conflicting = await this.prisma.appointment.findFirst({
+      where: {
+        id: { not: id },
+        doctorId,
+        appointmentDate: {
+          gte: dateObj,
+          lt: nextDate,
+        },
+        startTime: { lt: endTime },
+        endTime: { gt: startTime },
+        status: 'CONFIRMED',
+      },
+    });
+
+    if (conflicting) {
+      throw new BadRequestException('This time slot is already booked');
+    }
+
+    // Update the appointment
+    const updated = await this.prisma.appointment.update({
+      where: { id },
+      data: {
+        doctorId,
+        appointmentDate: dateObj,
+        startTime,
+        endTime,
+      },
+      include: {
+        patient: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration: true,
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Update appointment status (manager only)
+   */
+  async updateStatus(
+    id: string,
+    branchId: string,
+    status: string,
+    reason?: string,
+    notes?: string,
+  ) {
+    // Find the appointment
+    const appointment = await this.prisma.appointment.findFirst({
+      where: { id, branchId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    const updateData: any = { status };
+
+    if (status === 'CANCELLED' && reason) {
+      updateData.cancelReason = reason;
+    }
+
+    if (notes) {
+      updateData.notes = notes;
+    }
+
+    const updated = await this.prisma.appointment.update({
+      where: { id },
+      data: updateData,
+      include: {
+        patient: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration: true,
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Create appointment for existing patient (manager only)
+   */
+  async managerCreate(
+    branchId: string,
+    patientId: string,
+    doctorId: string,
+    serviceId: string,
+    appointmentDate: string,
+    startTime: string,
+    notes?: string,
+  ) {
+    // Verify patient exists
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    // Verify doctor belongs to branch
+    const doctor = await this.prisma.doctor.findFirst({
+      where: { id: doctorId, branchId },
+    });
+
+    if (!doctor) {
+      throw new BadRequestException('Doctor does not belong to this branch');
+    }
+
+    // Verify service exists
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    // Calculate end time
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    let endHour = startHour;
+    let endMin = startMin + service.duration;
+    while (endMin >= 60) {
+      endHour++;
+      endMin -= 60;
+    }
+    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+
+    // Check for conflicts
+    const dateObj = new Date(appointmentDate);
+    dateObj.setHours(0, 0, 0, 0);
+    const nextDate = new Date(dateObj);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    const conflicting = await this.prisma.appointment.findFirst({
+      where: {
+        doctorId,
+        appointmentDate: {
+          gte: dateObj,
+          lt: nextDate,
+        },
+        startTime: { lt: endTime },
+        endTime: { gt: startTime },
+        status: 'CONFIRMED',
+      },
+    });
+
+    if (conflicting) {
+      throw new BadRequestException('This time slot is already booked');
+    }
+
+    // Create appointment
+    const appointment = await this.prisma.appointment.create({
+      data: {
+        patientId,
+        doctorId,
+        branchId,
+        serviceId,
+        appointmentDate: dateObj,
+        startTime,
+        endTime,
+        status: 'CONFIRMED',
+        notes,
+      },
+      include: {
+        patient: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration: true,
+          },
+        },
+        branch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    return appointment;
+  }
+
+  /**
+   * Search patients by phone or name (manager only)
+   */
+  async searchPatients(branchId: string, phone?: string, name?: string) {
+    const where: any = {};
+
+    if (phone) {
+      where.user = {
+        phone: { contains: phone, mode: 'insensitive' },
+      };
+    } else if (name) {
+      where.user = {
+        OR: [
+          { firstName: { contains: name, mode: 'insensitive' } },
+          { lastName: { contains: name, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    const patients = await this.prisma.patient.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+      take: 20,
+    });
+
+    return patients;
+  }
+
   async findAll(
     userId: string,
     role: UserRole,

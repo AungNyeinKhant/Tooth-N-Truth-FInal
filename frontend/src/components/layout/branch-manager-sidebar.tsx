@@ -7,19 +7,15 @@ import { useAuthStore } from '@/stores';
 import {
   LayoutDashboard,
   Calendar,
-  Users,
   Clock,
   ClipboardList,
-  BarChart3,
 } from 'lucide-react';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Appointments', href: '/appointments', icon: Calendar },
-  { name: 'Doctors', href: '/doctors', icon: Users },
-  { name: 'Schedules', href: '/schedules', icon: Clock },
-  { name: 'Walk-ins', href: '/walk-ins', icon: ClipboardList },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Dashboard', href: '/branch-manager/dashboard', icon: LayoutDashboard },
+  { name: 'Appointments', href: '/branch-manager/appointments', icon: Calendar },
+  { name: 'Schedules', href: '/branch-manager/slots', icon: Clock },
+  { name: 'Walk-ins', href: '/branch-manager/walk-ins', icon: ClipboardList },
 ];
 
 export function BranchManagerSidebar() {
