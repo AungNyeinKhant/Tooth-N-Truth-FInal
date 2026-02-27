@@ -26,10 +26,8 @@ import {
   CalendarClock,
   Edit,
   FileText,
-  Plus,
   User,
 } from "lucide-react";
-import { CreateAppointmentModal } from "./components/create-appointment-modal";
 import { RescheduleModal } from "./components/reschedule-modal";
 import { StatusModal } from "./components/status-modal";
 import { NotesModal } from "./components/notes-modal";
@@ -61,7 +59,6 @@ export default function AppointmentsPage() {
   const [doctorFilter, setDoctorFilter] = useState("");
 
   // Modal state
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
@@ -79,9 +76,9 @@ export default function AppointmentsPage() {
     try {
       const [appointmentsRes, doctorsData, servicesData] = await Promise.all([
         api.getManagerAppointments({
-          status: statusFilterRef.current || undefined,
-          date: dateFilterRef.current || undefined,
-          doctorId: doctorFilterRef.current || undefined,
+          status: statusFilter || undefined,
+          date: dateFilter || undefined,
+          doctorId: doctorFilter || undefined,
           search: searchQuery || undefined,
           page,
           limit,
@@ -107,7 +104,7 @@ export default function AppointmentsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [addToast, page, limit, searchQuery, branchId]);
+  }, [addToast, page, limit, searchQuery, branchId, statusFilter, dateFilter, doctorFilter]);
 
   useEffect(() => {
     fetchData();
@@ -125,21 +122,6 @@ export default function AppointmentsPage() {
     const searchValue = searchRef.current?.value || "";
     setSearchQuery(searchValue);
     setPage(1);
-  };
-
-  const handleCreateAppointment = async (data: any) => {
-    setIsSubmitting(true);
-    try {
-      await appointmentsApi.create(data);
-      addToast("Appointment created successfully", "success");
-      fetchData();
-      setIsCreateModalOpen(false);
-    } catch (error: any) {
-      const message = error.response?.data?.message || "Failed to create appointment";
-      addToast(message, "error");
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleReschedule = async (data: any) => {
@@ -240,13 +222,6 @@ export default function AppointmentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
           <p className="text-sm text-gray-500">{branchName}</p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[#00BCD4] rounded-lg text-sm font-medium text-white hover:bg-[#00A5BA] transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Appointment
-        </button>
       </div>
 
       {/* Filters */}
@@ -320,10 +295,10 @@ export default function AppointmentsPage() {
               setStatusFilter(tab.key as AppointmentStatus | "");
               setPage(1);
             }}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
               statusFilter === tab.key
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                ? "bg-[#00BCD4] text-white shadow-md"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
             }`}
           >
             {tab.label}
@@ -512,15 +487,6 @@ export default function AppointmentsPage() {
       )}
 
       {/* Modals */}
-      <CreateAppointmentModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSubmit={handleCreateAppointment}
-        doctors={doctors}
-        services={services}
-        isLoading={isSubmitting}
-      />
-
       <RescheduleModal
         isOpen={isRescheduleModalOpen}
         onClose={() => {
