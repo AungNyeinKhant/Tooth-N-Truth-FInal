@@ -362,6 +362,51 @@ export class SlotsService {
   }
 
   /**
+   * Get doctors who work on a specific date for a branch
+   */
+  async getDoctorsByDate(branchId: string, dateString: string) {
+    // Parse date string (YYYY-MM-DD format)
+    const [year, month, day] = dateString.split('-').map(Number);
+    const targetDate = new Date(year, month - 1, day);
+
+    if (isNaN(targetDate.getTime())) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+    }
+
+    const dayOfWeek = targetDate.getDay();
+
+    // Get unique doctors with slots on this day
+    const doctorsWithSlots = await this.prisma.doctorSlot.findMany({
+      where: {
+        branchId,
+        dayOfWeek,
+        isActive: true,
+      },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+      },
+      orderBy: [{ doctor: { lastName: 'asc' } }, { startTime: 'asc' }],
+    });
+
+    // Get unique doctors
+    const uniqueDoctorsMap = new Map<string, any>();
+    for (const slot of doctorsWithSlots) {
+      if (!uniqueDoctorsMap.has(slot.doctor.id)) {
+        uniqueDoctorsMap.set(slot.doctor.id, slot.doctor);
+      }
+    }
+
+    return Array.from(uniqueDoctorsMap.values());
+  }
+
+  /**
    * Get available slots for a specific date
    * Excludes slots that have CONFIRMED appointments at that time
    */

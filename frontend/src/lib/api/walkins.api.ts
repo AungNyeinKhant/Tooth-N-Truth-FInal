@@ -1,6 +1,8 @@
 import apiClient from '@/lib/api/axios-instance';
 import { API_ENDPOINTS } from '@/lib/constants/api';
 
+const PATIENTS_ENDPOINT = '/api/patients';
+
 // ==================== Types ====================
 
 export type WalkInStatus = 'WAITING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
@@ -59,13 +61,25 @@ export interface WalkIn {
 }
 
 export interface CreateWalkInRequest {
+  date: string; // YYYY-MM-DD format
+  patientId?: string; // For returning patients
+  firstName?: string; // For new patients
+  lastName?: string; // For new patients
+  phone?: string; // For new patients
+  reason?: string;
+  doctorId: string; // Required
+  slotId?: string; // Optional - if provided, uses slot's time
+  serviceId?: string;
+}
+
+// Patient search result
+export interface PatientSearchResult {
+  id: string;
+  userId: string;
   firstName: string;
   lastName: string;
-  phone: string; // Required
-  reason?: string;
-  preferredDoctorId?: string;
-  slotId?: string; // Optional - if provided, uses slot's doctor and time
-  serviceId?: string;
+  phone: string;
+  email: string | null;
 }
 
 export interface UpdateWalkInStatusRequest {
@@ -149,6 +163,22 @@ export async function convertWalkInToAppointment(
 ): Promise<WalkIn & { message: string }> {
   const response = await apiClient.post(`${API_ENDPOINTS.WALKINS}/${id}/convert`, data);
   return response.data.data;
+}
+
+/**
+ * Search patients by phone number
+ */
+export async function searchPatientsByPhone(phone: string): Promise<PatientSearchResult[] | null> {
+  if (!phone || phone.trim().length < 3) {
+    return null;
+  }
+  try {
+    const response = await apiClient.get(`${PATIENTS_ENDPOINT}/search?phone=${encodeURIComponent(phone.trim())}`);
+    return response.data.data;
+  } catch (error) {
+    console.error('Error searching patients:', error);
+    return null;
+  }
 }
 
 // ==================== Helper Functions ====================

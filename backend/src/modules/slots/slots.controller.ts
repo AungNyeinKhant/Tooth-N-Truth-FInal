@@ -60,6 +60,18 @@ export class SlotsController {
     return this.slotsService.getDoctors(branchId);
   }
 
+  @Get('doctors-by-date')
+  @ApiOperation({ summary: 'Get doctors who work on a specific date' })
+  @ApiResponse({ status: 200, description: 'List of doctors working on that date' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async getDoctorsByDate(
+    @Query('date') date: string,
+    @CurrentUser('branchId') branchId: string,
+  ) {
+    return this.slotsService.getDoctorsByDate(branchId, date);
+  }
+
   @Get('available')
   @ApiOperation({ summary: 'Get available slots for a specific date (branch manager)' })
   @ApiResponse({ status: 200, description: 'List of available slots' })

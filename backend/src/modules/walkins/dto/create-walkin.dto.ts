@@ -8,26 +8,48 @@ import {
 } from 'class-validator';
 
 export class CreateWalkInDto {
-  @ApiProperty({ example: 'John', description: 'Patient first name' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  firstName!: string;
-
-  @ApiProperty({ example: 'Doe', description: 'Patient last name' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  lastName!: string;
-
   @ApiProperty({
-    example: '09123456789',
-    description: 'Patient phone number (required, no format validation)',
+    example: '2026-02-27',
+    description: 'Appointment date (YYYY-MM-DD format)',
   })
   @IsString()
   @IsNotEmpty()
+  date!: string;
+
+  @ApiPropertyOptional({
+    example: 'uuid-of-patient',
+    description: 'Existing patient ID (for returning patients)',
+  })
+  @IsOptional()
+  @IsUUID()
+  patientId?: string;
+
+  @ApiPropertyOptional({
+    example: 'John',
+    description: 'Patient first name (required for new patients)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  firstName?: string;
+
+  @ApiPropertyOptional({
+    example: 'Doe',
+    description: 'Patient last name (required for new patients)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  lastName?: string;
+
+  @ApiPropertyOptional({
+    example: '09123456789',
+    description: 'Patient phone number (required for new patients)',
+  })
+  @IsOptional()
+  @IsString()
   @MaxLength(20)
-  phone!: string;
+  phone?: string;
 
   @ApiPropertyOptional({
     example: 'Tooth pain in upper right molar',
@@ -38,17 +60,17 @@ export class CreateWalkInDto {
   @MaxLength(500)
   reason?: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     example: 'uuid-of-doctor',
-    description: 'Preferred doctor ID (required if slotId not provided)',
+    description: 'Doctor ID (required)',
   })
-  @IsOptional()
-  @IsUUID()
-  preferredDoctorId?: string;
+  @IsString()
+  @IsNotEmpty()
+  doctorId!: string;
 
   @ApiPropertyOptional({
     example: 'uuid-of-slot',
-    description: 'Slot ID for scheduled time (uses slot doctor and time if provided)',
+    description: 'Slot ID for scheduled time (optional)',
   })
   @IsOptional()
   @IsUUID()

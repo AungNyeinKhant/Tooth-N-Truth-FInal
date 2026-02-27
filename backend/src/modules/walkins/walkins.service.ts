@@ -30,8 +30,17 @@ export class WalkinsService {
     createWalkInDto: CreateWalkInDto,
     managerId: string,
   ) {
-    const { firstName, lastName, phone, reason, preferredDoctorId, slotId, serviceId } =
-      createWalkInDto;
+    const { 
+      date,
+      patientId,
+      firstName,
+      lastName,
+      phone,
+      reason,
+      doctorId,
+      slotId,
+      serviceId 
+    } = createWalkInDto;
 
     // Verify manager belongs to this branch
     const manager = await this.prisma.branchManager.findFirst({
@@ -42,41 +51,74 @@ export class WalkinsService {
       throw new ForbiddenException('You can only register walk-ins at your branch');
     }
 
-    // Find existing patient by phone number
-    let patient = await this.prisma.patient.findFirst({
-      where: {
-        user: {
-          phone: phone,
-        },
-      },
-      include: { user: true },
-    });
-
-    if (!patient) {
-      // Create new patient with unique temp email
-      const tempEmail = `walkin-${randomUUID()}@temp.toothandtruth.com`;
-      const user = await this.prisma.user.create({
-        data: {
-          email: tempEmail,
-          password: '', // No password for walk-in temp accounts
-          role: 'PATIENT',
-          firstName,
-          lastName,
-          phone: phone,
-          isActive: true,
-        },
+    // Validate: either patientId (returning) OR firstName+lastName+phone (new patient)
+    let patient;
+    if (patientId) {
+      // Use existing patient
+      patient = await this.prisma.patient.findUnique({
+        where: { id: patientId },
+        include: { user: true },
       });
-
-      // Create patient record
-      patient = await this.prisma.patient.create({
-        data: {
-          userId: user.id,
+      if (!patient) {
+        throw new NotFoundException('Patient not found');
+      }
+    } else if (firstName && lastName && phone) {
+      // Check if patient exists by phone
+      patient = await this.prisma.patient.findFirst({
+        where: {
+          user: {
+            phone: phone,
+          },
         },
         include: { user: true },
       });
+
+      if (!patient) {
+        // Create new patient with unique temp email
+        const tempEmail = `walkin-${randomUUID()}@temp.toothandtruth.com`;
+        const user = await this.prisma.user.create({
+          data: {
+            email: tempEmail,
+            password: '', // No password for walk-in temp accounts
+            role: 'PATIENT',
+            firstName,
+            lastName,
+            phone: phone,
+            isActive: true,
+          },
+        });
+
+        // Create patient record
+        patient = await this.prisma.patient.create({
+          data: {
+            userId: user.id,
+          },
+          include: { user: true },
+        });
+      }
+    } else {
+      throw new BadRequestException('Either patientId or (firstName, lastName, phone) is required');
     }
 
-    // Get today's date range
+    // Verify doctor belongs to the branch
+    const doctor = await this.prisma.doctor.findFirst({
+      where: { id: doctorId, branchId },
+    });
+
+    if (!doctor) {
+      throw new BadRequestException('Selected doctor is not available at this branch');
+    }
+
+    // Parse appointment date
+    const [year, month, day] = date.split('-').map(Number);
+    const appointmentDate = new Date(year, month - 1, day);
+    appointmentDate.setHours(0, 0, 0, 0);
+
+    if (isNaN(appointmentDate.getTime())) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+    }
+
+    // Get today's date range for token generation
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -97,22 +139,17 @@ export class WalkinsService {
     // Generate token number (e.g., W001, W002)
     const tokenNumber = `W${String(todayWalkInsCount + 1).padStart(3, '0')}`;
 
-    // Determine doctor and time based on slot or preference
-    let doctorId: string;
-    let appointmentDate: Date;
+    // Determine time based on slot
     let startTime: string;
     let endTime: string;
 
     if (slotId) {
-      // Use slot's doctor and time
+      // Use slot's time
       const slot = await this.prisma.doctorSlot.findFirst({
         where: {
           id: slotId,
           branchId,
           isActive: true,
-        },
-        include: {
-          doctor: true,
         },
       });
 
@@ -120,28 +157,10 @@ export class WalkinsService {
         throw new BadRequestException('Selected slot is not available at this branch');
       }
 
-      doctorId = slot.doctorId;
-
-      // Calculate appointment date based on slot's day of week
-      // Find next occurrence of that day
-      const now = new Date();
-      const currentDayOfWeek = now.getDay();
-      let daysUntilSlot = slot.dayOfWeek - currentDayOfWeek;
-      if (daysUntilSlot < 0) {
-        daysUntilSlot += 7; // Next week
-      } else if (daysUntilSlot === 0) {
-        // Same day - check if slot time has passed
-        const [slotStartHour, slotStartMin] = slot.startTime.split(':').map(Number);
-        const currentHour = now.getHours();
-        const currentMin = now.getMinutes();
-        if (currentHour > slotStartHour || (currentHour === slotStartHour && currentMin >= slotStartMin)) {
-          daysUntilSlot = 7; // Next week
-        }
+      // Verify slot belongs to selected doctor
+      if (slot.doctorId !== doctorId) {
+        throw new BadRequestException('Selected slot does not belong to the selected doctor');
       }
-      
-      appointmentDate = new Date(now);
-      appointmentDate.setDate(appointmentDate.getDate() + daysUntilSlot);
-      appointmentDate.setHours(0, 0, 0, 0);
 
       startTime = slot.startTime;
       endTime = slot.endTime;
@@ -159,51 +178,49 @@ export class WalkinsService {
 
       if (conflictingAppointment) {
         throw new BadRequestException(
-          `This slot (${DAY_NAMES[slot.dayOfWeek]} ${slot.startTime}-${slot.endTime}) is already booked. Please choose another slot.`
+          `This slot (${slot.startTime}-${slot.endTime}) is already booked. Please choose another slot.`
         );
       }
     } else {
-      // Use preferred doctor or auto-assign
-      doctorId = preferredDoctorId || '';
-      
-      if (!doctorId) {
-        // Find an available doctor in the branch
-        const availableDoctor = await this.prisma.doctor.findFirst({
-          where: {
-            branchId,
-            isActive: true,
-          },
-        });
-        if (availableDoctor) {
-          doctorId = availableDoctor.id;
-        } else {
-          throw new BadRequestException('No doctors available at this branch');
-        }
-      }
-
-      // Verify doctor belongs to the branch
-      const doctor = await this.prisma.doctor.findFirst({
-        where: { id: doctorId, branchId },
-      });
-
-      if (!doctor) {
-        throw new BadRequestException(
-          'Selected doctor is not available at this branch',
-        );
-      }
-
-      // Use current time
-      appointmentDate = today;
+      // No slot selected - use current time for immediate walk-in
       const now = new Date();
       startTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       
-      // End time will be calculated based on service duration below
-      endTime = startTime; // Temporary, will be updated
+      // Get service for duration calculation
+      let service;
+      if (serviceId) {
+        service = await this.prisma.service.findUnique({
+          where: { id: serviceId, isActive: true },
+        });
+      } else {
+        service = await this.prisma.service.findFirst({
+          where: { isActive: true },
+        });
+      }
+
+      if (!service) {
+        throw new BadRequestException('No active service found');
+      }
+
+      // Calculate end time based on service duration
+      const startMinutes = now.getHours() * 60 + now.getMinutes();
+      const endMinutes = startMinutes + service.duration;
+      const endHour = Math.floor(endMinutes / 60) % 24;
+      const endMin = endMinutes % 60;
+      endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
     }
 
-    // Get service (default to first active service if not specified)
+    // Get service (for slot case)
     let service;
-    if (serviceId) {
+    if (!slotId && serviceId) {
+      service = await this.prisma.service.findUnique({
+        where: { id: serviceId, isActive: true },
+      });
+    } else if (!slotId) {
+      service = await this.prisma.service.findFirst({
+        where: { isActive: true },
+      });
+    } else if (serviceId) {
       service = await this.prisma.service.findUnique({
         where: { id: serviceId, isActive: true },
       });
@@ -215,16 +232,6 @@ export class WalkinsService {
 
     if (!service) {
       throw new BadRequestException('No active service found');
-    }
-
-    // Calculate end time based on service duration (if not using slot)
-    if (!slotId) {
-      const now = new Date();
-      const startMinutes = now.getHours() * 60 + now.getMinutes();
-      const endMinutes = startMinutes + service.duration;
-      const endHour = Math.floor(endMinutes / 60) % 24;
-      const endMin = endMinutes % 60;
-      endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
     }
 
     // Create the walk-in appointment

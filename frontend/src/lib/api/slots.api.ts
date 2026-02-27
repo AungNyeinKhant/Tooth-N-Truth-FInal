@@ -145,6 +145,14 @@ export const slotsApi = {
     );
     return response.data?.data ?? response.data;
   },
+
+  // Get doctors who work on a specific date (for walk-in registration)
+  getDoctorsByDate: async (date: string) => {
+    const response = await apiClient.get(
+      `${API_ENDPOINTS.SLOTS}/doctors-by-date?date=${date}`
+    );
+    return response.data?.data ?? response.data;
+  },
 };
 
 // Day names helper
