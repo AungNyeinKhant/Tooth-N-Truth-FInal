@@ -88,7 +88,14 @@ export default function SlotsPage() {
     dayIndex: index,
     slots: filteredSlots
       .filter((s) => s.dayOfWeek === index)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+      .sort((a, b) => {
+        // Normalize time format for proper sorting (pad hours if needed)
+        const normalizeTime = (t: string) => {
+          const [hours, minutes] = t.trim().split(':');
+          return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+        };
+        return normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime));
+      }),
   }));
 
   // Get color for doctor
@@ -348,7 +355,12 @@ export default function SlotsPage() {
               .sort((a, b) => {
                 if (a.dayOfWeek !== b.dayOfWeek)
                   return a.dayOfWeek - b.dayOfWeek;
-                return a.startTime.localeCompare(b.startTime);
+                // Normalize time format for proper sorting
+                const normalizeTime = (t: string) => {
+                  const [hours, minutes] = t.trim().split(':');
+                  return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+                };
+                return normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime));
               })
               .map((slot) => {
                 const color = getDoctorColor(slot.doctorId);
