@@ -9,6 +9,7 @@ import {
   Calendar,
   Clock,
   ClipboardList,
+  BarChart3,
 } from 'lucide-react';
 
 const navigation = [
@@ -16,6 +17,7 @@ const navigation = [
   { name: 'Appointments', href: '/branch-manager/appointments', icon: Calendar },
   { name: 'Schedules', href: '/branch-manager/slots', icon: Clock },
   { name: 'Walk-ins', href: '/branch-manager/walk-ins', icon: ClipboardList },
+  { name: 'Analytics', href: '/branch-manager/analytics', icon: BarChart3 },
 ];
 
 export function BranchManagerSidebar() {
