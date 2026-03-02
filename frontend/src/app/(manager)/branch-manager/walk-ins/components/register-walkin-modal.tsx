@@ -17,6 +17,14 @@ interface RegisterWalkInModalProps {
 
 type PatientMode = "new" | "returning";
 
+// Helper function to format date as YYYY-MM-DD in local timezone
+const formatDateToLocal = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export function RegisterWalkInModal({
   isOpen,
   onClose,
@@ -27,7 +35,7 @@ export function RegisterWalkInModal({
 }: RegisterWalkInModalProps) {
   // Form state
   const [formData, setFormData] = useState<CreateWalkInRequest>({
-    date: new Date().toISOString().split("T")[0],
+    date: formatDateToLocal(new Date()),
     patientId: "",
     firstName: "",
     lastName: "",
@@ -49,8 +57,8 @@ export function RegisterWalkInModal({
   const [isSearchingPatients, setIsSearchingPatients] = useState(false);
   const [showPatientResults, setShowPatientResults] = useState(false);
 
-  // Get today's date string
-  const today = new Date().toISOString().split("T")[0];
+  // Get today's date string (using local timezone)
+  const today = formatDateToLocal(new Date());
 
   // Fetch doctors when date changes
   const fetchDoctorsByDate = useCallback(async (date: string) => {
@@ -134,7 +142,7 @@ export function RegisterWalkInModal({
   // Reset form
   const resetForm = useCallback(() => {
     setFormData({
-      date: new Date().toISOString().split("T")[0],
+      date: formatDateToLocal(new Date()),
       patientId: "",
       firstName: "",
       lastName: "",

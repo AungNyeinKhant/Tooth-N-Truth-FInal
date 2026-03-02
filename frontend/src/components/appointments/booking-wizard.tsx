@@ -130,13 +130,21 @@ export function BookingWizard() {
       const loadSlots = async () => {
         setLoading(true);
         try {
-          const dateStr = selectedDate.toISOString().split("T")[0];
+          // Format date as YYYY-MM-DD in LOCAL timezone to match backend
+          const year = selectedDate.getFullYear();
+          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(selectedDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          
+          console.log('[Booking] Loading slots - doctor:', selectedDoctor.id, 'date:', dateStr, 'service:', selectedService.id);
+          
           const res = await doctorsApi.getAvailableSlots(
             selectedDoctor.id,
             dateStr,
             selectedService.id,
           );
           // Handle slots response - API may return array or { data: [...], meta: {...} }
+          console.log('[Booking] Slots API response:', res.data);
           let slotsData: any = res.data;
           if (
             slotsData &&
@@ -146,6 +154,7 @@ export function BookingWizard() {
           ) {
             slotsData = slotsData.data;
           }
+          console.log('[Booking] Processed slots:', slotsData);
           setAvailableSlots(Array.isArray(slotsData) ? slotsData : []);
         } catch (error) {
           console.error("Failed to load available slots:", error);
@@ -193,11 +202,17 @@ export function BookingWizard() {
 
     setIsSubmitting(true);
     try {
+      // Format date as YYYY-MM-DD in LOCAL timezone
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
       await appointmentsApi.create({
         branchId: selectedBranch.id,
         doctorId: selectedDoctor.id,
         serviceId: selectedService.id,
-        appointmentDate: selectedDate.toISOString().split("T")[0],
+        appointmentDate: dateStr,
         startTime: selectedSlot.startTime,
         notes,
       });

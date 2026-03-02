@@ -315,8 +315,9 @@ export class AppointmentsService {
     }
     const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 
-    // Check for conflicts (excluding current appointment)
-    const dateObj = new Date(appointmentDate);
+    // Parse date string in local time (matching doctors service)
+    const [year, month, day] = appointmentDate.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
     dateObj.setHours(0, 0, 0, 0);
     const nextDate = new Date(dateObj);
     nextDate.setDate(nextDate.getDate() + 1);
@@ -497,8 +498,9 @@ export class AppointmentsService {
     }
     const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 
-    // Check for conflicts
-    const dateObj = new Date(appointmentDate);
+    // Parse date string in local time (matching doctors service)
+    const [year, month, day] = appointmentDate.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
     dateObj.setHours(0, 0, 0, 0);
     const nextDate = new Date(dateObj);
     nextDate.setDate(nextDate.getDate() + 1);
@@ -835,8 +837,9 @@ export class AppointmentsService {
     }
     const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 
-    // Check if time slot is available
-    const dateObj = new Date(appointmentDate);
+    // Parse date string in local time (matching doctors service)
+    const [year, month, day] = appointmentDate.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
     const startOfDay = new Date(dateObj);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(dateObj);

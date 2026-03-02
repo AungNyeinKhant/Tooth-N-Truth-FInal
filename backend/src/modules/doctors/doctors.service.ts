@@ -131,9 +131,11 @@ export class DoctorsService {
 
   async getAvailableSlots(doctorId: string, dateString: string, serviceId: string) {
     // Parse date string directly (YYYY-MM-DD format from frontend)
-    // Don't use new Date() which interprets as UTC and causes timezone issues
+    // Use local time to match how dates are stored/queried consistently
     const [year, month, day] = dateString.split('-').map(Number);
     const date = new Date(year, month - 1, day); // Local time
+    
+    console.log('[DoctorsService] Query:', { dateString, parsedDate: date.toDateString(), dayOfWeek: date.getDay() });
     
     if (isNaN(date.getTime())) {
       throw new BadRequestException('Invalid date format');
@@ -182,6 +184,12 @@ export class DoctorsService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
+    console.log('[DoctorsService] Query appointments:', { 
+      doctorId, 
+      startOfDay: startOfDay.toISOString(), 
+      endOfDay: endOfDay.toISOString() 
+    });
+
     const existingAppointments = await this.prisma.appointment.findMany({
       where: {
         doctorId,
@@ -196,6 +204,8 @@ export class DoctorsService {
         endTime: true,
       },
     });
+
+    console.log('[DoctorsService] Found appointments:', existingAppointments);
 
     // Generate available slots from each slot definition
     const availableSlots: Array<{ startTime: string; endTime: string; isBooked?: boolean }> = [];
@@ -262,12 +272,25 @@ export class DoctorsService {
         const aptStart = apt.startTime;
         const aptEnd = apt.endTime;
         
-        // Check overlap
-        return (
-          (slotStart >= aptStart && slotStart < aptEnd) ||
-          (slotEnd > aptStart && slotEnd <= aptEnd) ||
-          (slotStart <= aptStart && slotEnd >= aptEnd)
+        // Convert times to minutes for proper numeric comparison
+        const toMinutes = (time: string) => {
+          const [h, m] = time.split(':').map(Number);
+          return h * 60 + m;
+        };
+        
+        const slotStartMin = toMinutes(slotStart);
+        const slotEndMin = toMinutes(slotEnd);
+        const aptStartMin = toMinutes(aptStart);
+        const aptEndMin = toMinutes(aptEnd);
+        
+        // Check overlap using numeric comparison
+        const isOverlap = (
+          (slotStartMin >= aptStartMin && slotStartMin < aptEndMin) ||
+          (slotEndMin > aptStartMin && slotEndMin <= aptEndMin) ||
+          (slotStartMin <= aptStartMin && slotEndMin >= aptEndMin)
         );
+        
+        return isOverlap;
       });
       
       slots.push({ startTime: slotStart, endTime: slotEnd, isBooked: hasConflict });

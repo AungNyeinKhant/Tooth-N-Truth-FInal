@@ -279,93 +279,42 @@ async function main() {
   console.log(`✅ Created ${doctors.length} doctors`);
 
   // Create Doctor Slots (morning and afternoon slots for each doctor)
-  // Example: Morning 9:00-9:30, 9:35-10:05, 10:10-10:40 | Afternoon 14:00-14:30, 14:35-15:05
+  // Non-overlapping times: 
+  // Morning: 09:00-09:30, 09:35-10:05, 10:10-10:40 (no overlap)
+  // Afternoon: 14:00-14:30, 14:35-15:05, 15:10-15:40 (no overlap)
+  // Day: 0=Sunday, 1=Monday, ..., 5=Friday, 6=Saturday
   let slotCount = 0;
+  const slotTimes = [
+    // Morning slots
+    { startTime: '09:00', endTime: '09:30' },
+    { startTime: '09:35', endTime: '10:05' },
+    { startTime: '10:10', endTime: '10:40' },
+    // Afternoon slots
+    { startTime: '14:00', endTime: '14:30' },
+    { startTime: '14:35', endTime: '15:05' },
+    { startTime: '15:10', endTime: '15:40' },
+  ];
+  
   for (const doctor of doctors) {
-    // Create slots for Monday-Friday
-    for (let day = 1; day <= 5; day++) {
-      // Morning slots
-      await prisma.doctorSlot.create({
-        data: {
-          branchId: doctor.branchId,
-          doctorId: doctor.id,
-          dayOfWeek: day,
-          startTime: '09:00',
-          endTime: '09:30',
-          bufferTime: 5,
-          isActive: true,
-        },
-      });
-      slotCount++;
-
-      await prisma.doctorSlot.create({
-        data: {
-          branchId: doctor.branchId,
-          doctorId: doctor.id,
-          dayOfWeek: day,
-          startTime: '09:35',
-          endTime: '10:05',
-          bufferTime: 5,
-          isActive: true,
-        },
-      });
-      slotCount++;
-
-      await prisma.doctorSlot.create({
-        data: {
-          branchId: doctor.branchId,
-          doctorId: doctor.id,
-          dayOfWeek: day,
-          startTime: '10:10',
-          endTime: '10:40',
-          bufferTime: 5,
-          isActive: true,
-        },
-      });
-      slotCount++;
-
-      // Afternoon slots
-      await prisma.doctorSlot.create({
-        data: {
-          branchId: doctor.branchId,
-          doctorId: doctor.id,
-          dayOfWeek: day,
-          startTime: '14:00',
-          endTime: '14:30',
-          bufferTime: 5,
-          isActive: true,
-        },
-      });
-      slotCount++;
-
-      await prisma.doctorSlot.create({
-        data: {
-          branchId: doctor.branchId,
-          doctorId: doctor.id,
-          dayOfWeek: day,
-          startTime: '14:35',
-          endTime: '15:05',
-          bufferTime: 5,
-          isActive: true,
-        },
-      });
-      slotCount++;
-
-      await prisma.doctorSlot.create({
-        data: {
-          branchId: doctor.branchId,
-          doctorId: doctor.id,
-          dayOfWeek: day,
-          startTime: '15:10',
-          endTime: '15:40',
-          bufferTime: 5,
-          isActive: true,
-        },
-      });
-      slotCount++;
+    // Create slots for Monday-Friday (day 1-5) AND Saturday-Sunday (day 0, 6)
+    for (let day = 0; day <= 6; day++) {
+      for (const slot of slotTimes) {
+        await prisma.doctorSlot.create({
+          data: {
+            branchId: doctor.branchId,
+            doctorId: doctor.id,
+            dayOfWeek: day,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            bufferTime: 5,
+            isActive: true,
+          },
+        });
+        slotCount++;
+      }
     }
   }
-  console.log(`✅ Created ${slotCount} doctor slots`);
+  console.log(`✅ Created ${slotCount} doctor slots (7 days x 6 slots x ${doctors.length} doctors)`);
 
   // Create Sample Patients
   const patientPassword = await bcrypt.hash('patient123', 10);
