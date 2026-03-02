@@ -174,31 +174,32 @@ export default function MedicalHistoryPage() {
   const pastAppointments = filteredAppointments.filter(apt => apt.status !== 'CONFIRMED');
 
   return (
-    <div className="space-y-6">
-      {/* Header with border */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900">Medical Records</h1>
-        <p className="text-sm text-gray-500">Your appointment history</p>
-      </div>
+    <div className="container-app py-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header with border */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h1 className="text-2xl font-bold text-gray-900">Medical Records</h1>
+          <p className="text-sm text-gray-500">Your appointment history</p>
+        </div>
 
-      {/* Status Filter */}
-      <div className="flex gap-2 p-1 bg-white rounded-lg border border-gray-200 w-fit">
-        {statusTabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setStatusFilter(tab.key)}
-            className={`px-4 py-2 text-sm rounded-md transition-colors ${
-              statusFilter === tab.key
-                ? "bg-[#00BCD4] text-white"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+        {/* Status Filter */}
+        <div className="flex gap-2 p-1 bg-white rounded-lg border border-gray-200 w-fit mb-6">
+          {statusTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={`px-4 py-2 text-sm rounded-md transition-colors ${
+                statusFilter === tab.key
+                  ? "bg-[#00BCD4] text-white"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      {/* Loading */}
+        {/* Loading */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-[#00BCD4]" />
@@ -482,7 +483,8 @@ export default function MedicalHistoryPage() {
             </div>
           </div>
         </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

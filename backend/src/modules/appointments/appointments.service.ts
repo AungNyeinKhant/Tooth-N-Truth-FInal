@@ -301,19 +301,27 @@ export class AppointmentsService {
       throw new BadRequestException('Doctor does not belong to this branch');
     }
 
-    // Calculate end time based on service duration
-    const service = await this.prisma.service.findUnique({
-      where: { id: appointment.serviceId },
+    // Parse date to get day of week
+    const [reschYear, reschMonth, reschDay] = appointmentDate.split('-').map(Number);
+    const reschDateObj = new Date(reschYear, reschMonth - 1, reschDay);
+    const reschDayOfWeek = reschDateObj.getDay();
+
+    // Look up the doctor's slot to get end time
+    const doctorSlotResch = await this.prisma.doctorSlot.findFirst({
+      where: {
+        doctorId,
+        dayOfWeek: reschDayOfWeek,
+        startTime,
+        isActive: true,
+      },
     });
 
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    let endHour = startHour;
-    let endMin = startMin + (service?.duration || 30);
-    while (endMin >= 60) {
-      endHour++;
-      endMin -= 60;
+    if (!doctorSlotResch) {
+      throw new BadRequestException('Selected time slot is not available');
     }
-    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+
+    // Use slot's end time instead of calculating based on service duration
+    const endTime = doctorSlotResch.endTime;
 
     // Parse date string in local time (matching doctors service)
     const [year, month, day] = appointmentDate.split('-').map(Number);
@@ -479,24 +487,27 @@ export class AppointmentsService {
       throw new BadRequestException('Doctor does not belong to this branch');
     }
 
-    // Verify service exists
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
+    // Parse date to get day of week
+    const [mgrYear, mgrMonth, mgrDay] = appointmentDate.split('-').map(Number);
+    const mgrDateObj = new Date(mgrYear, mgrMonth - 1, mgrDay);
+    const mgrDayOfWeek = mgrDateObj.getDay();
+
+    // Look up the doctor's slot to get end time
+    const doctorSlotMgr = await this.prisma.doctorSlot.findFirst({
+      where: {
+        doctorId,
+        dayOfWeek: mgrDayOfWeek,
+        startTime,
+        isActive: true,
+      },
     });
 
-    if (!service) {
-      throw new NotFoundException('Service not found');
+    if (!doctorSlotMgr) {
+      throw new BadRequestException('Selected time slot is not available');
     }
 
-    // Calculate end time
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    let endHour = startHour;
-    let endMin = startMin + service.duration;
-    while (endMin >= 60) {
-      endHour++;
-      endMin -= 60;
-    }
-    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+    // Use slot's end time instead of calculating based on service duration
+    const endTime = doctorSlotMgr.endTime;
 
     // Parse date string in local time (matching doctors service)
     const [year, month, day] = appointmentDate.split('-').map(Number);
@@ -823,14 +834,23 @@ export class AppointmentsService {
       throw new NotFoundException('Patient profile not found');
     }
 
-    // Get service duration to calculate end time
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
-      select: { duration: true },
+    // Parse date to get day of week
+    const [year, month, day] = appointmentDate.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
+    const dayOfWeek = dateObj.getDay();
+
+    // Look up the doctor's slot to get end time
+    const doctorSlot = await this.prisma.doctorSlot.findFirst({
+      where: {
+        doctorId,
+        dayOfWeek,
+        startTime,
+        isActive: true,
+      },
     });
 
-    if (!service) {
-      throw new NotFoundException('Service not found');
+    if (!doctorSlot) {
+      throw new BadRequestException('Selected time slot is not available');
     }
 
     // Validate and parse start time
@@ -838,18 +858,11 @@ export class AppointmentsService {
     if (!timeRegex.test(startTime)) {
       throw new BadRequestException('Invalid time format. Use HH:mm format (e.g., 09:00)');
     }
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    let endHour = startHour;
-    let endMin = startMin + service.duration;
-    while (endMin >= 60) {
-      endHour++;
-      endMin -= 60;
-    }
-    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 
-    // Parse date string in local time (matching doctors service)
-    const [year, month, day] = appointmentDate.split('-').map(Number);
-    const dateObj = new Date(year, month - 1, day);
+    // Use slot's end time instead of calculating based on service duration
+    const endTime = doctorSlot.endTime;
+
+    // Use already parsed date for conflict check
     const startOfDay = new Date(dateObj);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(dateObj);
