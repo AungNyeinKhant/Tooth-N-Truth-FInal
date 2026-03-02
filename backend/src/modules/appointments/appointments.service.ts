@@ -729,7 +729,17 @@ export class AppointmentsService {
       orderBy: { appointmentDate: 'desc' },
     });
 
-    return appointments;
+    // Transform to return date as YYYY-MM-DD string
+    const transformed = appointments.map(apt => ({
+      ...apt,
+      appointmentDate: apt.appointmentDate instanceof Date 
+        ? apt.appointmentDate.toISOString().split('T')[0] 
+        : String(apt.appointmentDate).split('T')[0],
+    }));
+
+    console.log('[AppointmentsService] getPatientAppointments result:', transformed);
+
+    return transformed;
   }
 
   async findOne(id: string, userId: string, role: UserRole) {
@@ -987,6 +997,18 @@ export class AppointmentsService {
 
     if (appointment.status === 'COMPLETED') {
       throw new BadRequestException('Cannot cancel completed appointment');
+    }
+
+    // Check if appointment is at least 1 hour away (for patients)
+    const appointmentDateTime = new Date(appointment.appointmentDate);
+    const [hours, minutes] = appointment.startTime.split(':').map(Number);
+    appointmentDateTime.setHours(hours, minutes, 0, 0);
+    
+    const now = new Date();
+    const hoursUntilAppointment = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursUntilAppointment < 1) {
+      throw new BadRequestException('Cannot cancel appointment less than 1 hour before the scheduled time');
     }
 
     const updated = await this.prisma.appointment.update({

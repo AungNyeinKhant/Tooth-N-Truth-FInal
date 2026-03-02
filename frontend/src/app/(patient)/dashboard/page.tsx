@@ -102,6 +102,9 @@ export default function PatientDashboard() {
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-4">
           <Button onClick={() => router.push('/book')}>Book New Appointment</Button>
+          <Button variant="outline" onClick={() => router.push('/medical-history')}>
+            View Medical Records
+          </Button>
         </div>
       </Card>
 

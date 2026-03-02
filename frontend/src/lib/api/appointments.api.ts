@@ -10,6 +10,39 @@ export interface CreateAppointmentData {
   notes?: string;
 }
 
+// Types for patient appointments (medical records)
+export interface PatientAppointment {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  branchId: string;
+  serviceId: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  notes: string | null;
+  cancelReason: string | null;
+  isWalkIn: boolean;
+  tokenNumber: string | null;
+  checkInTime: string | null;
+  createdAt: string;
+  updatedAt: string;
+  doctor: {
+    firstName: string;
+    lastName: string;
+    specialization: string;
+  };
+  branch: {
+    name: string;
+    address: string;
+  };
+  service: {
+    name: string;
+    duration: number;
+  };
+}
+
 export interface AdminAppointmentsQuery {
   status?: string;
   branchId?: string;
