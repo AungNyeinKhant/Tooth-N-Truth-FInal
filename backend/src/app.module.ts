@@ -10,7 +10,8 @@ import { BranchesModule } from './modules/branches/branches.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
 import { ServicesModule } from './modules/services/services.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
-import { SchedulesModule } from './modules/schedules/schedules.module';
+import { SlotsModule } from './modules/slots/slots.module';
+import { WalkinsModule } from './modules/walkins/walkins.module';
 import { MedicalRecordsModule } from './modules/medical-records/medical-records.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 
@@ -28,7 +29,8 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     DoctorsModule,
     ServicesModule,
     AppointmentsModule,
-    SchedulesModule,
+    SlotsModule,
+    WalkinsModule,
     MedicalRecordsModule,
     AnalyticsModule,
   ],

@@ -101,7 +101,7 @@ export const doctorsApi = {
   
   getAvailableSlots: (doctorId: string, date: string, serviceId: string) => {
     console.log('[Doctors API] Fetching available slots:', { doctorId, date, serviceId });
-    return apiClient.get<Array<{ startTime: string; endTime: string }>>(
+    return apiClient.get<Array<{ startTime: string; endTime: string; isBooked?: boolean }>>(
       `${API_ENDPOINTS.DOCTORS}/${doctorId}/available-slots?date=${date}&serviceId=${serviceId}`
     );
   },

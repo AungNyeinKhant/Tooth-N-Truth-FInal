@@ -9,7 +9,7 @@ async function main() {
   // Clean existing data
   await prisma.medicalRecord.deleteMany();
   await prisma.appointment.deleteMany();
-  await prisma.doctorSchedule.deleteMany();
+  await prisma.doctorSlot.deleteMany();
   await prisma.doctor.deleteMany();
   await prisma.branchService.deleteMany();
   await prisma.service.deleteMany();
@@ -278,25 +278,43 @@ async function main() {
   );
   console.log(`✅ Created ${doctors.length} doctors`);
 
-  // Create Doctor Schedules (Monday-Friday, 9 AM - 5 PM)
+  // Create Doctor Slots (morning and afternoon slots for each doctor)
+  // Non-overlapping times: 
+  // Morning: 09:00-09:30, 09:35-10:05, 10:10-10:40 (no overlap)
+  // Afternoon: 14:00-14:30, 14:35-15:05, 15:10-15:40 (no overlap)
+  // Day: 0=Sunday, 1=Monday, ..., 5=Friday, 6=Saturday
+  let slotCount = 0;
+  const slotTimes = [
+    // Morning slots
+    { startTime: '09:00', endTime: '09:30' },
+    { startTime: '09:35', endTime: '10:05' },
+    { startTime: '10:10', endTime: '10:40' },
+    // Afternoon slots
+    { startTime: '14:00', endTime: '14:30' },
+    { startTime: '14:35', endTime: '15:05' },
+    { startTime: '15:10', endTime: '15:40' },
+  ];
+  
   for (const doctor of doctors) {
-    for (let day = 1; day <= 5; day++) {
-      // Monday=1 to Friday=5
-      await prisma.doctorSchedule.create({
-        data: {
-          doctorId: doctor.id,
-          branchId: doctor.branchId,
-          dayOfWeek: day,
-          startTime: '09:00',
-          endTime: '17:00',
-          slotDuration: 30,
-          bufferTime: 10,
-          isActive: true,
-        },
-      });
+    // Create slots for Monday-Friday (day 1-5) AND Saturday-Sunday (day 0, 6)
+    for (let day = 0; day <= 6; day++) {
+      for (const slot of slotTimes) {
+        await prisma.doctorSlot.create({
+          data: {
+            branchId: doctor.branchId,
+            doctorId: doctor.id,
+            dayOfWeek: day,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            bufferTime: 5,
+            isActive: true,
+          },
+        });
+        slotCount++;
+      }
     }
   }
-  console.log(`✅ Created doctor schedules`);
+  console.log(`✅ Created ${slotCount} doctor slots (7 days x 6 slots x ${doctors.length} doctors)`);
 
   // Create Sample Patients
   const patientPassword = await bcrypt.hash('patient123', 10);

@@ -12,13 +12,118 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AppointmentsService } from './appointments.service';
 import { CurrentUser, Roles } from '../../core/decorators';
 import { UserRole } from '../../shared/enums';
-import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
+import { CreateAppointmentDto, UpdateAppointmentDto, QueryAppointmentsDto, RescheduleAppointmentDto, UpdateAppointmentStatusDto, ManagerCreateAppointmentDto, SearchPatientDto } from './dto';
 import { formatList } from '../../shared/utils';
 
 @ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
+
+  // ==================== Branch Manager Endpoints ====================
+
+  @Get('manager')
+  @ApiBearerAuth()
+  @Roles(UserRole.BRANCH_MANAGER)
+  @ApiOperation({ summary: 'Get appointments for branch manager (scoped to their branch)' })
+  @ApiResponse({ status: 200, description: 'List of branch appointments' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - managers only' })
+  async getManagerAppointments(
+    @CurrentUser('branchId') branchId: string,
+    @Query() query: QueryAppointmentsDto,
+  ) {
+    const { items, total } = await this.appointmentsService.getManagerAppointments(
+      branchId,
+      query,
+    );
+    return formatList(items, total, {
+      page: query.page || 1,
+      limit: query.limit || 20,
+    });
+  }
+
+  @Get('manager/patients')
+  @ApiBearerAuth()
+  @Roles(UserRole.BRANCH_MANAGER)
+  @ApiOperation({ summary: 'Search patients by phone or name' })
+  @ApiResponse({ status: 200, description: 'List of patients' })
+  async searchPatients(
+    @CurrentUser('branchId') branchId: string,
+    @Query() query: SearchPatientDto,
+  ) {
+    return this.appointmentsService.searchPatients(branchId, query.phone, query.name);
+  }
+
+  @Patch(':id/reschedule')
+  @ApiBearerAuth()
+  @Roles(UserRole.BRANCH_MANAGER)
+  @ApiOperation({ summary: 'Reschedule an appointment (manager only)' })
+  @ApiResponse({ status: 200, description: 'Appointment rescheduled' })
+  @ApiResponse({ status: 400, description: 'Time slot unavailable' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - managers only' })
+  @ApiResponse({ status: 404, description: 'Appointment not found' })
+  async reschedule(
+    @Param('id') id: string,
+    @CurrentUser('branchId') branchId: string,
+    @Body() dto: RescheduleAppointmentDto,
+  ) {
+    return this.appointmentsService.reschedule(
+      id,
+      branchId,
+      dto.doctorId,
+      dto.appointmentDate,
+      dto.startTime,
+    );
+  }
+
+  @Patch(':id/status')
+  @ApiBearerAuth()
+  @Roles(UserRole.BRANCH_MANAGER)
+  @ApiOperation({ summary: 'Update appointment status (manager only)' })
+  @ApiResponse({ status: 200, description: 'Status updated' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - managers only' })
+  @ApiResponse({ status: 404, description: 'Appointment not found' })
+  async updateStatus(
+    @Param('id') id: string,
+    @CurrentUser('branchId') branchId: string,
+    @Body() dto: UpdateAppointmentStatusDto,
+  ) {
+    return this.appointmentsService.updateStatus(
+      id,
+      branchId,
+      dto.status,
+      dto.reason,
+      dto.notes,
+    );
+  }
+
+  @Post('manager-create')
+  @ApiBearerAuth()
+  @Roles(UserRole.BRANCH_MANAGER)
+  @ApiOperation({ summary: 'Create appointment for patient (manager only)' })
+  @ApiResponse({ status: 201, description: 'Appointment created' })
+  @ApiResponse({ status: 400, description: 'Time slot unavailable' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - managers only' })
+  async managerCreate(
+    @CurrentUser('branchId') branchId: string,
+    @Body() dto: ManagerCreateAppointmentDto,
+  ) {
+    return this.appointmentsService.managerCreate(
+      branchId,
+      dto.patientId,
+      dto.doctorId,
+      dto.serviceId,
+      dto.appointmentDate,
+      dto.startTime,
+      dto.notes,
+    );
+  }
+
+  // ==================== Existing Endpoints ====================
 
   @Get('admin')
   @ApiBearerAuth()

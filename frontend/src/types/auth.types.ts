@@ -8,6 +8,13 @@ export interface User {
   isActive: boolean;
   profileImage?: string;
   createdAt: string;
+  branchId?: string;
+  branchManager?: {
+    branchId: string;
+    branch: {
+      name: string;
+    };
+  };
 }
 
 export interface Patient {

@@ -44,12 +44,12 @@ export class DoctorsController {
   }
 
   @Public()
-  @Get(':id/schedules')
-  @ApiOperation({ summary: 'Get doctor schedules' })
-  @ApiResponse({ status: 200, description: 'Doctor schedules' })
+  @Get(':id/slots')
+  @ApiOperation({ summary: 'Get doctor slots' })
+  @ApiResponse({ status: 200, description: 'Doctor slots' })
   @ApiResponse({ status: 404, description: 'Doctor not found' })
-  async getDoctorSchedules(@Param('id') id: string) {
-    return this.doctorsService.getDoctorSchedules(id);
+  async getDoctorSlots(@Param('id') id: string) {
+    return this.doctorsService.getDoctorSlots(id);
   }
 
   @Public()
