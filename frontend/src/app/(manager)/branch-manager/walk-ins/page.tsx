@@ -250,23 +250,23 @@ export default function WalkInsPage() {
 
       {/* Date Filter Tabs */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+        <div className="flex gap-1 p-1 bg-white rounded-lg border border-gray-200">
           <button
             onClick={() => setDateFilter("today")}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+            className={`px-4 py-2 text-sm rounded-md transition-colors ${
               dateFilter === "today"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                ? "bg-[#00BCD4] text-white font-medium shadow-sm"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
             }`}
           >
             Today
           </button>
           <button
             onClick={() => setDateFilter("all")}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+            className={`px-4 py-2 text-sm rounded-md transition-colors ${
               dateFilter === "all"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                ? "bg-[#00BCD4] text-white font-medium shadow-sm"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
             }`}
           >
             All History
@@ -422,6 +422,9 @@ export default function WalkInsPage() {
                     Status
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Appointment
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Wait Time
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -483,6 +486,16 @@ export default function WalkInsPage() {
                       >
                         {walkIn.displayStatus.replace("_", " ")}
                       </span>
+                    </td>
+
+                    {/* Appointment Date/Time */}
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-gray-900">
+                        {walkIn.appointmentDate ? walkIn.appointmentDate.split('T')[0] : '-'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {walkIn.startTime} - {walkIn.endTime}
+                      </div>
                     </td>
 
                     {/* Wait Time */}
