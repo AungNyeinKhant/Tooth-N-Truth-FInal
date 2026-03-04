@@ -85,23 +85,28 @@ export default function MedicalHistoryPage() {
   const canCancel = (appointment: PatientAppointment) => {
     if (appointment.status !== 'CONFIRMED') return false;
     if (!appointment.appointmentDate || !appointment.startTime) return false;
-    
-    // Parse date - handle both ISO format and YYYY-MM-DD
-    const dateOnly = appointment.appointmentDate.split('T')[0];
-    const dateParts = dateOnly.split('-').map(Number);
+
+    // Parse the local date from the ISO string (converts UTC to local timezone)
+    const localDate = new Date(appointment.appointmentDate);
+    if (isNaN(localDate.getTime())) return false;
+
     const timeParts = appointment.startTime.split(':').map(Number);
-    
-    if (dateParts.some(isNaN) || timeParts.some(isNaN)) return false;
-    
-    const [year, month, day] = dateParts;
+    if (timeParts.some(isNaN)) return false;
     const [hours, minutes] = timeParts;
-    const appointmentDateTime = new Date(year, month - 1, day, hours, minutes);
-    
+
+    // Combine local date with the appointment's start time
+    const appointmentDateTime = new Date(
+      localDate.getFullYear(),
+      localDate.getMonth(),
+      localDate.getDate(),
+      hours,
+      minutes,
+    );
+
     if (isNaN(appointmentDateTime.getTime())) return false;
-    
+
     const now = new Date();
     const hoursUntil = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-    
     return hoursUntil >= 1;
   };
 
@@ -121,25 +126,12 @@ export default function MedicalHistoryPage() {
   };
 
   // Format date properly in local timezone
+  // IMPORTANT: do NOT use dateStr.split('T')[0] — that strips timezone info
+  // causing UTC dates to show the wrong local day (e.g. March 4 UTC+7 = March 5 local)
   const formatDate = (dateStr: string | undefined | null) => {
-    if (!dateStr || typeof dateStr !== 'string') {
-      return 'No Date';
-    }
-    
-    // Handle ISO format or YYYY-MM-DD format
-    const dateOnly = dateStr.split('T')[0];
-    const [year, month, day] = dateOnly.split('-').map(Number);
-    
-    if (isNaN(year) || isNaN(month) || isNaN(day)) {
-      return 'Invalid Date';
-    }
-    
-    const date = new Date(year, month - 1, day);
-    
-    if (isNaN(date.getTime())) {
-      return 'Invalid Date';
-    }
-    
+    if (!dateStr || typeof dateStr !== 'string') return 'No Date';
+    const date = new Date(dateStr); // correctly converts UTC to local time
+    if (isNaN(date.getTime())) return 'Invalid Date';
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
       year: 'numeric',

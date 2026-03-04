@@ -11,7 +11,6 @@ import {
   Stethoscope,
   Users,
   Calendar,
-  Settings,
   LogOut,
   BarChart3,
   CalendarClock,
@@ -58,11 +57,6 @@ const navigation = [
     name: "Users",
     href: "/admin/users",
     icon: Users,
-  },
-  {
-    name: "Settings",
-    href: "/admin/settings",
-    icon: Settings,
   },
 ];
 

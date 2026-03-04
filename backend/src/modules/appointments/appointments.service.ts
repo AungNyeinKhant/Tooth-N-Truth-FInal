@@ -740,15 +740,14 @@ export class AppointmentsService {
       orderBy: { appointmentDate: 'desc' },
     });
 
-    // Transform to return date as YYYY-MM-DD string
+    // Return appointments with appointmentDate as full ISO string
+    // (do NOT strip to YYYY-MM-DD because that gives the UTC date, not local date)
     const transformed = appointments.map(apt => ({
       ...apt,
-      appointmentDate: apt.appointmentDate instanceof Date 
-        ? apt.appointmentDate.toISOString().split('T')[0] 
-        : String(apt.appointmentDate).split('T')[0],
+      appointmentDate: apt.appointmentDate instanceof Date
+        ? apt.appointmentDate.toISOString()
+        : String(apt.appointmentDate),
     }));
-
-    console.log('[AppointmentsService] getPatientAppointments result:', transformed);
 
     return transformed;
   }

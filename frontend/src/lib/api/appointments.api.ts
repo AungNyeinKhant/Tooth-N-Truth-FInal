@@ -134,4 +134,6 @@ export const appointmentsApi = {
     apiClient.patch(`${API_ENDPOINTS.APPOINTMENTS}/${id}`, data),
   cancel: (id: string, reason: string) =>
     apiClient.patch(`${API_ENDPOINTS.APPOINTMENTS}/${id}/cancel`, { reason }),
+  delete: (id: string) =>
+    apiClient.delete(`${API_ENDPOINTS.APPOINTMENTS}/${id}`),
 };
