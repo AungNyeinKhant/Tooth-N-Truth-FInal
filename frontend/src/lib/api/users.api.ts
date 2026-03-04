@@ -50,6 +50,7 @@ export interface UserQuery {
 export interface UpdateUserData {
   firstName?: string;
   lastName?: string;
+  email?: string;
   phone?: string;
   isActive?: boolean;
 }

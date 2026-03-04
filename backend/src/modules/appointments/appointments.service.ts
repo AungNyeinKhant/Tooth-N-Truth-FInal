@@ -68,20 +68,27 @@ export class AppointmentsService {
       }
     }
 
-    // Search by patient name, email, or phone
+    // Search by patient name, email, phone, doctor name, or service name
     if (search) {
-      where.OR = [
+      where.AND = [
         {
-          patient: {
-            user: {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search, mode: 'insensitive' } },
-              ],
+          OR: [
+            {
+              patient: {
+                user: {
+                  OR: [
+                    { firstName: { contains: search, mode: 'insensitive' } },
+                    { lastName: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                    { phone: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
             },
-          },
+            { doctor: { firstName: { contains: search, mode: 'insensitive' } } },
+            { doctor: { lastName: { contains: search, mode: 'insensitive' } } },
+            { service: { name: { contains: search, mode: 'insensitive' } } },
+          ],
         },
       ];
     }
@@ -208,21 +215,29 @@ export class AppointmentsService {
       }
     }
 
-    // Search by patient name
+    // Search by patient name/phone/email, doctor name, service name, or token
     if (search) {
-      where.OR = [
+      where.AND = [
         {
-          patient: {
-            user: {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-              ],
+          OR: [
+            {
+              patient: {
+                user: {
+                  OR: [
+                    { firstName: { contains: search, mode: 'insensitive' } },
+                    { lastName: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                    { phone: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
             },
-          },
+            { doctor: { firstName: { contains: search, mode: 'insensitive' } } },
+            { doctor: { lastName: { contains: search, mode: 'insensitive' } } },
+            { service: { name: { contains: search, mode: 'insensitive' } } },
+            { tokenNumber: { contains: search, mode: 'insensitive' } },
+          ],
         },
-        { tokenNumber: { contains: search, mode: 'insensitive' } },
       ];
     }
 

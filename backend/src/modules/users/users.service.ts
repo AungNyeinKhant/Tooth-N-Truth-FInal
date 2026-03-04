@@ -149,6 +149,16 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // If changing email, check uniqueness
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
+      const existing = await this.prisma.user.findUnique({
+        where: { email: updateUserDto.email },
+      });
+      if (existing) {
+        throw new ConflictException('Email is already in use by another account');
+      }
+    }
+
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: {
@@ -156,6 +166,7 @@ export class UsersService {
         lastName: updateUserDto.lastName,
         phone: updateUserDto.phone,
         isActive: updateUserDto.isActive,
+        ...(updateUserDto.email ? { email: updateUserDto.email } : {}),
       },
       select: {
         id: true,

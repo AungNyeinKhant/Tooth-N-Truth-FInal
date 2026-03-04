@@ -49,12 +49,12 @@ export default function AppointmentsPage() {
 
   // Filter state
   const statusFilterRef = useRef<AppointmentStatus | "">("");
-  const searchRef = useRef<HTMLInputElement>(null);
   const dateFilterRef = useRef<string>("");
   const doctorFilterRef = useRef<string>("");
   const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "">("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // live input value
+  const [searchQuery, setSearchQuery] = useState("");  // committed query sent to API
   const [dateFilter, setDateFilter] = useState(() => searchParams.get("date") || "");
   const [doctorFilter, setDoctorFilter] = useState("");
 
@@ -119,8 +119,13 @@ export default function AppointmentsPage() {
 
   // Handlers
   const handleSearch = () => {
-    const searchValue = searchRef.current?.value || "";
-    setSearchQuery(searchValue);
+    setSearchQuery(searchInput);
+    setPage(1);
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput("");
+    setSearchQuery("");
     setPage(1);
   };
 
@@ -230,15 +235,25 @@ export default function AppointmentsPage() {
         <div className="flex-1 max-w-md">
           <div className="relative">
             <input
-              ref={searchRef}
               type="text"
-              placeholder="Search by patient name..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by patient name or phone..."
+              className="w-full pl-10 pr-20 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSearch();
               }}
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            {searchInput && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute right-16 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                title="Clear"
+              >
+                ✕
+              </button>
+            )}
             <button
               onClick={handleSearch}
               className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
