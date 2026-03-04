@@ -13,7 +13,6 @@ import {
   ClipboardList,
   BarChart3,
   LogOut,
-  Settings,
 } from "lucide-react";
 
 interface ManagerSidebarProps {
@@ -52,11 +51,6 @@ const navigation = [
     name: "Analytics",
     href: "/branch-manager/analytics",
     icon: BarChart3,
-  },
-  {
-    name: "Settings",
-    href: "/branch-manager/settings",
-    icon: Settings,
   },
 ];
 

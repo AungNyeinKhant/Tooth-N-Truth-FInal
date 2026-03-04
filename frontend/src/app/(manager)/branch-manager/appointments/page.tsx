@@ -346,6 +346,9 @@ export default function AppointmentsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Type
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Revenue
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -406,6 +409,28 @@ export default function AppointmentsPage() {
                         </span>
                       ) : (
                         <span className="text-xs text-gray-500">Booked</span>
+                      )}
+                    </td>
+
+                    {/* Revenue */}
+                    <td className="px-4 py-3">
+                      <p className={`text-sm font-semibold ${
+                        appointment.status === 'COMPLETED'
+                          ? 'text-green-600'
+                          : appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW'
+                          ? 'text-gray-400 line-through'
+                          : 'text-gray-700'
+                      }`}>
+                        {Number(appointment.service.price).toLocaleString('en-US')} MMK
+                      </p>
+                      {appointment.status === 'COMPLETED' && (
+                        <p className="text-xs text-green-500">Earned</p>
+                      )}
+                      {(appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') && (
+                        <p className="text-xs text-gray-400">Lost</p>
+                      )}
+                      {appointment.status === 'CONFIRMED' && (
+                        <p className="text-xs text-blue-400">Expected</p>
                       )}
                     </td>
 
