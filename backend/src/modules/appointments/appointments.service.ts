@@ -15,6 +15,7 @@ export interface AdminAppointmentsQuery {
   startDate?: string;
   endDate?: string;
   search?: string;
+  orderBy?: string;
   page: number;
   limit: number;
 }
@@ -67,7 +68,7 @@ export class AppointmentsService {
       }
     }
 
-    // Search by patient name or email
+    // Search by patient name, email, or phone
     if (search) {
       where.OR = [
         {
@@ -77,12 +78,19 @@ export class AppointmentsService {
                 { firstName: { contains: search, mode: 'insensitive' } },
                 { lastName: { contains: search, mode: 'insensitive' } },
                 { email: { contains: search, mode: 'insensitive' } },
+                { phone: { contains: search, mode: 'insensitive' } },
               ],
             },
           },
         },
       ];
     }
+
+    // Order by
+    let orderByClause: any = [{ appointmentDate: 'desc' }, { startTime: 'asc' }];
+    if (query.orderBy === 'appointmentDate_asc') orderByClause = [{ appointmentDate: 'asc' }, { startTime: 'asc' }];
+    else if (query.orderBy === 'createdAt_desc') orderByClause = [{ createdAt: 'desc' }];
+    else if (query.orderBy === 'appointmentDate_desc') orderByClause = [{ appointmentDate: 'desc' }, { startTime: 'asc' }];
 
     const [items, total] = await Promise.all([
       this.prisma.appointment.findMany({
@@ -123,10 +131,7 @@ export class AppointmentsService {
             },
           },
         },
-        orderBy: [
-          { appointmentDate: 'desc' },
-          { startTime: 'asc' },
-        ],
+        orderBy: orderByClause,
         skip: (page - 1) * limit,
         take: limit,
       }),

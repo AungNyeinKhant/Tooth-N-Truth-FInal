@@ -14,7 +14,9 @@ import {
   XCircle, 
   X,
   Loader2,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 export default function MedicalHistoryPage() {
@@ -29,6 +31,8 @@ export default function MedicalHistoryPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<PatientAppointment | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
     fetchAppointments();
@@ -179,7 +183,7 @@ export default function MedicalHistoryPage() {
           {statusTabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setStatusFilter(tab.key)}
+              onClick={() => { setStatusFilter(tab.key); setPage(1); }}
               className={`px-4 py-2 text-sm rounded-md transition-colors ${
                 statusFilter === tab.key
                   ? "bg-[#00BCD4] text-white"
@@ -221,7 +225,7 @@ export default function MedicalHistoryPage() {
                 {statusFilter === 'CONFIRMED' ? 'Ongoing Appointments' : 'Ongoing'}
               </h2>
               <div className="space-y-4">
-                {ongoingAppointments.map((apt) => (
+                {ongoingAppointments.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE).map((apt) => (
                   <div
                     key={apt.id}
                     className="bg-white rounded-xl border border-gray-200 p-6"
@@ -321,7 +325,7 @@ export default function MedicalHistoryPage() {
                  'Past Appointments'}
               </h2>
               <div className="space-y-4">
-                {pastAppointments.map((apt) => (
+                {pastAppointments.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE).map((apt) => (
                   <div
                     key={apt.id}
                     className="bg-white rounded-xl border border-gray-200 p-6 opacity-90"
@@ -400,6 +404,34 @@ export default function MedicalHistoryPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {filteredAppointments.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-4 py-3">
+              <p className="text-sm text-gray-500">
+                Showing {(page-1)*PAGE_SIZE + 1}–{Math.min(page*PAGE_SIZE, filteredAppointments.length)} of {filteredAppointments.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p-1))}
+                  disabled={page === 1}
+                  className="p-2 rounded-lg border border-gray-200 disabled:opacity-50 hover:bg-gray-50"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-sm text-gray-600">
+                  Page {page} of {Math.ceil(filteredAppointments.length / PAGE_SIZE)}
+                </span>
+                <button
+                  onClick={() => setPage(p => Math.min(Math.ceil(filteredAppointments.length/PAGE_SIZE), p+1))}
+                  disabled={page >= Math.ceil(filteredAppointments.length / PAGE_SIZE)}
+                  className="p-2 rounded-lg border border-gray-200 disabled:opacity-50 hover:bg-gray-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           )}

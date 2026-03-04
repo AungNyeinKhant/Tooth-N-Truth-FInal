@@ -139,6 +139,7 @@ export class AppointmentsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('search') search?: string,
+    @Query('orderBy') orderBy?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -151,6 +152,7 @@ export class AppointmentsController {
       startDate,
       endDate,
       search,
+      orderBy,
       page: parsedPage,
       limit: parsedLimit,
     });

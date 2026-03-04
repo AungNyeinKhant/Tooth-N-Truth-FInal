@@ -20,12 +20,10 @@ import {
   Filter,
   RefreshCw,
   Loader2,
-  MoreVertical,
   CheckCircle,
   XCircle,
-  Clock,
+  AlertTriangle,
   CalendarClock,
-  Edit,
   FileText,
   User,
 } from "lucide-react";
@@ -47,7 +45,7 @@ export default function AppointmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [limit] = useState(20);
+  const [limit] = useState(10);
 
   // Filter state
   const statusFilterRef = useRef<AppointmentStatus | "">("");
@@ -441,30 +439,30 @@ export default function AppointmentsPage() {
                           <>
                             <button
                               onClick={() => openRescheduleModal(appointment)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                               title="Reschedule"
                             >
                               <CalendarClock className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => openStatusModal(appointment, "COMPLETED")}
-                              className="p-1.5 text-green-600 hover:bg-green-50 rounded"
+                              className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
                               title="Mark Completed"
                             >
                               <CheckCircle className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => openStatusModal(appointment, "NO_SHOW")}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-colors"
                               title="No Show"
                             >
-                              <XCircle className="w-4 h-4" />
+                              <AlertTriangle className="w-4 h-4" />
                             </button>
                           </>
                         )}
                         <button
                           onClick={() => openNotesModal(appointment)}
-                          className="p-1.5 text-gray-600 hover:bg-gray-50 rounded"
+                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors"
                           title="Add Notes"
                         >
                           <FileText className="w-4 h-4" />
@@ -472,7 +470,7 @@ export default function AppointmentsPage() {
                         {appointment.status === "CONFIRMED" && (
                           <button
                             onClick={() => openStatusModal(appointment, "CANCELLED")}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
                             title="Cancel"
                           >
                             <XCircle className="w-4 h-4" />

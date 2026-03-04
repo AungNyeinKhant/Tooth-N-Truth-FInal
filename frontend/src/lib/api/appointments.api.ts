@@ -50,6 +50,7 @@ export interface AdminAppointmentsQuery {
   startDate?: string;
   endDate?: string;
   search?: string;
+  orderBy?: string;
   page?: number;
   limit?: number;
 }
@@ -103,6 +104,7 @@ export const appointmentsApi = {
     if (query?.startDate) params.append('startDate', query.startDate);
     if (query?.endDate) params.append('endDate', query.endDate);
     if (query?.search) params.append('search', query.search);
+    if (query?.orderBy) params.append('orderBy', query.orderBy);
     if (query?.page) params.append('page', query.page.toString());
     if (query?.limit) params.append('limit', query.limit.toString());
     
