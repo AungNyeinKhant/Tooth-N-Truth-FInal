@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores";
 import {
@@ -53,9 +54,10 @@ export default function AppointmentsPage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const dateFilterRef = useRef<string>("");
   const doctorFilterRef = useRef<string>("");
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "">("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState(() => searchParams.get("date") || "");
   const [doctorFilter, setDoctorFilter] = useState("");
 
   // Modal state

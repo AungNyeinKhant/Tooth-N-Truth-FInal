@@ -54,6 +54,46 @@ export interface AdminAppointmentsQuery {
   limit?: number;
 }
 
+export interface ManagerAppointment {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  branchId: string;
+  serviceId: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  notes: string | null;
+  isWalkIn: boolean;
+  tokenNumber: string | null;
+  checkInTime: string | null;
+  patient: {
+    user: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+    };
+  };
+  doctor: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    specialization: string;
+  };
+  branch: {
+    id: string;
+    name: string;
+  };
+  service: {
+    id: string;
+    name: string;
+    duration: number;
+    price: number;
+  };
+}
+
 export const appointmentsApi = {
   getAdmin: (query?: AdminAppointmentsQuery) => {
     const params = new URLSearchParams();
@@ -72,6 +112,18 @@ export const appointmentsApi = {
       : `${API_ENDPOINTS.APPOINTMENTS}/admin`;
     
     return apiClient.get(url);
+  },
+  getManager: (query?: { status?: string; date?: string; page?: number; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (query?.status) params.append('status', query.status);
+    if (query?.date) params.append('date', query.date);
+    if (query?.page) params.append('page', query.page.toString());
+    if (query?.limit) params.append('limit', query.limit.toString());
+    const queryString = params.toString();
+    const url = queryString
+      ? `${API_ENDPOINTS.APPOINTMENTS}/manager?${queryString}`
+      : `${API_ENDPOINTS.APPOINTMENTS}/manager`;
+    return apiClient.get<{ data: { data: ManagerAppointment[]; total: number } }>(url);
   },
   getAll: (params?: { status?: string; date?: string }) =>
     apiClient.get(API_ENDPOINTS.APPOINTMENTS, { params }),
