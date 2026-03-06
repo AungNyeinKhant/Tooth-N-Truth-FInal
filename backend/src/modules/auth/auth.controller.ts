@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiCookieAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -15,6 +16,7 @@ import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './dto';
 import { Public } from '../../core/decorators';
 import { CurrentUser } from '../../core/decorators';
+import { GoogleOAuthGuard } from '../../core/guards';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -132,5 +134,35 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getCurrentUser(@CurrentUser('sub') userId: string) {
     return this.authService.getCurrentUser(userId);
+  }
+
+  @Public()
+  @Get('google')
+  @UseGuards(GoogleOAuthGuard)
+  @ApiOperation({ summary: 'Initiate Google OAuth login' })
+  async googleAuth() {
+    // GoogleOAuthGuard initiates the flow automatically
+  }
+
+  @Public()
+  @Get('google/callback')
+  @UseGuards(GoogleOAuthGuard)
+  @ApiOperation({ summary: 'Handle Google OAuth callback' })
+  async googleAuthRedirect(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    if (!req.user) {
+      // Redirect to frontend login with error (placeholder frontend URL handling)
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(`${frontendUrl}/login?error=GoogleLoginFailed`);
+    }
+
+    // Generate tokens for the authenticated user
+    const result = await this.authService.generateTokens(req.user);
+    
+    // Set refresh token in HttpOnly cookie
+    this.setRefreshTokenCookie(res, result.refreshToken);
+    
+    // Redirect to frontend callback page with the short-lived access token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    return res.redirect(`${frontendUrl}/auth/callback?token=${result.accessToken}`);
   }
 }

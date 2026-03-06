@@ -195,10 +195,81 @@ export class AuthService {
       throw new UnauthorizedException(ERROR_MESSAGES.AUTH.USER_NOT_FOUND);
     }
 
+  }
+
+  async validateOAuthLogin(profile: any) {
+    const { googleId, email, firstName, lastName, profileImage } = profile;
+
+    // 1. Check if user exists with googleId
+    let user = await this.prisma.user.findUnique({
+      where: { googleId },
+      include: {
+        patient: true,
+        branchManager: true,
+      },
+    });
+
+    if (user) {
+      // Update profile image if missing
+      if (!user.profileImage && profileImage) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { profileImage },
+          include: { patient: true, branchManager: true },
+        });
+      }
+      return user;
+    }
+
+    // 2. Check if user exists with this email (Link Account)
+    user = await this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        patient: true,
+        branchManager: true,
+      },
+    });
+
+    if (user) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId,
+          googleEmail: email,
+          profileImage: user.profileImage || profileImage,
+        },
+        include: {
+          patient: true,
+          branchManager: true,
+        },
+      });
+      return user;
+    }
+
+    // 3. Auto-register new Patient
+    user = await this.prisma.user.create({
+      data: {
+        email,
+        googleEmail: email,
+        googleId,
+        role: UserRole.PATIENT,
+        firstName,
+        lastName,
+        profileImage,
+        patient: {
+          create: {}, // Create empty patient relation
+        },
+      },
+      include: {
+        patient: true,
+        branchManager: true,
+      },
+    });
+
     return user;
   }
 
-  private async generateTokens(user: any): Promise<GeneratedTokens> {
+  async generateTokens(user: any): Promise<GeneratedTokens> {
     const payload: TokenPayload = {
       sub: user.id,
       email: user.email,
