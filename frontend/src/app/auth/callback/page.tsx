@@ -7,34 +7,41 @@ import { useAuthStore } from '@/stores';
 function CallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const checkAuth = useAuthStore((state) => state.checkAuth);
+  const { checkAuth, user } = useAuthStore();
 
   useEffect(() => {
     const token = searchParams.get('token');
     
     if (token) {
-      // 1. Save token
+      // 1. Save token to localStorage
       localStorage.setItem('accessToken', token);
       
-      // 2. Fetch user profile
+      // 2. Set cookie for middleware (required for SSR route protection)
+      const isProduction = window.location.protocol === 'https:';
+      document.cookie = `accessToken=${token}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
+      
+      // 3. Fetch user profile and wait for state update
       checkAuth()
         .then(() => {
-          const user = useAuthStore.getState().user;
-          // Redirect to appropriate dashboard
-          const userRole = user?.role; // e.g. PATIENT
-          // Wait to ensure state is updated
-          setTimeout(() => {
-            if (userRole === 'PATIENT') router.replace('/patient/dashboard');
-            else if (userRole === 'BRANCH_MANAGER') router.replace('/branch-manager/dashboard');
-            else if (userRole === 'ADMIN') router.replace('/admin/dashboard');
-            else router.replace('/');
-          }, 100);
+          // Get updated user from state after checkAuth completes
+          const currentUser = useAuthStore.getState().user;
+          const userRole = currentUser?.role;
+          
+          console.log('[OAuth Callback] User loaded:', currentUser);
+          console.log('[OAuth Callback] Role:', userRole);
+          
+          // Redirect based on role
+          if (userRole === 'PATIENT') router.replace('/patient/dashboard');
+          else if (userRole === 'BRANCH_MANAGER') router.replace('/branch-manager/dashboard');
+          else if (userRole === 'ADMIN') router.replace('/admin/dashboard');
+          else router.replace('/');
         })
         .catch((err) => {
-          console.error('Failed to fetch user profile after OAuth:', err);
+          console.error('[OAuth Callback] Failed to fetch user profile:', err);
           router.replace('/login?error=ProfileFetchFailed');
         });
     } else {
+      console.error('[OAuth Callback] No token provided');
       router.replace('/login?error=NoTokenProvided');
     }
   }, [searchParams, router, checkAuth]);

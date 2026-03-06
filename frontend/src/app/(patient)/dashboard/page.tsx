@@ -39,7 +39,7 @@ export default function PatientDashboard() {
   }
 
   // Show nothing while redirecting
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-text-gray">Redirecting to login...</p>
@@ -47,11 +47,13 @@ export default function PatientDashboard() {
     );
   }
 
+  const displayName = user?.firstName || user?.email?.split('@')[0] || 'Patient';
+
   return (
     <div className="container-app py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-text-navy">
-          Welcome, {user?.firstName}! 👋
+          Welcome, {displayName}! 👋
         </h1>
         <p className="text-text-gray mt-2">
           Manage your dental appointments and health records

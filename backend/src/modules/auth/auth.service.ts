@@ -195,6 +195,7 @@ export class AuthService {
       throw new UnauthorizedException(ERROR_MESSAGES.AUTH.USER_NOT_FOUND);
     }
 
+    return user;
   }
 
   async validateOAuthLogin(profile: any) {

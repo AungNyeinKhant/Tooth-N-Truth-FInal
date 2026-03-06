@@ -73,7 +73,7 @@ export function Navbar() {
             {isAuthenticated ? (
               <>
                 <span className="hidden md:block text-sm text-text-gray">
-                  Welcome, {user?.firstName}
+                  Welcome, {user?.firstName || user?.email?.split('@')[0] || 'Guest'}
                 </span>
                 <div className="relative group">
                   <button className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100">
