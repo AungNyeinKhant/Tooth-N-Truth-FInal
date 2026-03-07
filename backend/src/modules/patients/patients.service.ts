@@ -96,15 +96,17 @@ export class PatientsService {
    * Get patient stats for dashboard
    */
   async getPatientStats(patientId: string): Promise<PatientStats> {
+    // Use a date string in YYYY-MM-DD format for comparison
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    const todayDate = new Date(todayStr + 'T00:00:00.000Z');
 
     // Get upcoming appointments count
     const upcomingCount = await this.prisma.appointment.count({
       where: {
         patientId,
-        status: { in: ['CONFIRMED'] },
-        appointmentDate: { gte: today },
+        status: 'CONFIRMED',
+        appointmentDate: { gte: todayDate },
       },
     });
 
@@ -113,7 +115,7 @@ export class PatientsService {
       where: {
         patientId,
         status: { in: ['COMPLETED', 'NO_SHOW'] },
-        appointmentDate: { lt: today },
+        appointmentDate: { lt: todayDate },
       },
     });
 
@@ -122,7 +124,7 @@ export class PatientsService {
       where: {
         patientId,
         status: 'CONFIRMED',
-        appointmentDate: { gte: today },
+        appointmentDate: { gte: todayDate },
       },
       orderBy: {
         appointmentDate: 'asc',
@@ -143,7 +145,8 @@ export class PatientsService {
     const formattedNextAppointment = nextAppointment
       ? {
           id: nextAppointment.id,
-          appointmentDate: nextAppointment.appointmentDate.toISOString().split('T')[0],
+          // Return full ISO string so frontend can parse it correctly like medical-history
+          appointmentDate: nextAppointment.appointmentDate.toISOString(),
           startTime: nextAppointment.startTime,
           endTime: nextAppointment.endTime,
           doctorName: `Dr. ${nextAppointment.doctor.firstName} ${nextAppointment.doctor.lastName}`,
@@ -163,14 +166,21 @@ export class PatientsService {
    * Get patient's upcoming appointments
    */
   async getUpcomingAppointments(patientId: string, limit: number = 5): Promise<PatientAppointment[]> {
+    // Use a date string in YYYY-MM-DD format for comparison
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    
+    console.log('[getUpcomingAppointments] patientId:', patientId);
+    console.log('[getUpcomingAppointments] todayStr:', todayStr);
 
     const appointments = await this.prisma.appointment.findMany({
       where: {
         patientId,
-        status: { in: ['CONFIRMED'] },
-        appointmentDate: { gte: today },
+        status: 'CONFIRMED',
+        // Compare using the date string format
+        appointmentDate: {
+          gte: new Date(todayStr + 'T00:00:00.000Z'),
+        },
       },
       orderBy: [
         { appointmentDate: 'asc' },
@@ -190,9 +200,12 @@ export class PatientsService {
       },
     });
 
+    console.log('[getUpcomingAppointments] Found:', appointments.length, 'appointments');
+
     return appointments.map((apt) => ({
       id: apt.id,
-      appointmentDate: apt.appointmentDate.toISOString().split('T')[0],
+      // Return full ISO string so frontend can parse it correctly like medical-history
+      appointmentDate: apt.appointmentDate.toISOString(),
       startTime: apt.startTime,
       endTime: apt.endTime,
       status: apt.status,
@@ -260,7 +273,8 @@ export class PatientsService {
 
     const data = appointments.map((apt) => ({
       id: apt.id,
-      appointmentDate: apt.appointmentDate.toISOString().split('T')[0],
+      // Return full ISO string so frontend can parse it correctly like medical-history
+      appointmentDate: apt.appointmentDate.toISOString(),
       startTime: apt.startTime,
       endTime: apt.endTime,
       status: apt.status,

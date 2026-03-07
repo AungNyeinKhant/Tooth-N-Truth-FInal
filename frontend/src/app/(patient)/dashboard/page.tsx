@@ -55,15 +55,22 @@ export default function PatientDashboard() {
     setIsLoadingData(true);
     try {
       console.log('[Dashboard] Fetching stats and appointments...');
-      const [statsData, appointmentsData] = await Promise.all([
-        getMyStats(),
-        getMyUpcomingAppointments(3),
-      ]);
-      setStats(statsData);
-      setUpcomingAppointments(appointmentsData);
-      console.log('[Dashboard] Data loaded:', { stats: statsData, appointments: appointmentsData.length });
+      
+      // Fetch separately with more debug
+      const statsRes = await getMyStats();
+      const upcomingRes = await getMyUpcomingAppointments(3);
+      
+      console.log('[Dashboard] Stats:', statsRes);
+      console.log('[Dashboard] Upcoming:', upcomingRes);
+      console.log('[Dashboard] Upcoming is array:', Array.isArray(upcomingRes));
+      console.log('[Dashboard] Upcoming length:', upcomingRes?.length);
+      
+      setStats(statsRes);
+      setUpcomingAppointments(upcomingRes || []);
+      console.log('[Dashboard] Data loaded successfully');
     } catch (error: any) {
       console.error('[Dashboard] Error fetching data:', error);
+      console.error('[Dashboard] Error response:', error.response?.data);
       addToast(error.response?.data?.message || 'Failed to load dashboard data', 'error');
     } finally {
       setIsLoadingData(false);
@@ -128,22 +135,43 @@ export default function PatientDashboard() {
 
   const displayName = user?.firstName || user?.email?.split('@')[0] || 'Patient';
 
-  // Calculate countdown to next appointment
+  // Calculate countdown to next appointment - use same logic as medical-history
   const getCountdown = () => {
     if (!stats?.nextAppointment) return null;
     
     const apt = stats.nextAppointment;
-    const aptDateTime = new Date(`${apt.appointmentDate}T${apt.startTime}`);
+    // Combine the ISO date with the start time (like medical-history does)
+    const appointmentDateTime = new Date(apt.appointmentDate);
+    
+    // Parse hours and minutes from startTime
+    const timeParts = apt.startTime.split(':').map(Number);
+    if (timeParts.length >= 2) {
+      appointmentDateTime.setHours(timeParts[0], timeParts[1], 0, 0);
+    }
+    
     const now = new Date();
-    const diff = aptDateTime.getTime() - now.getTime();
+    const diff = appointmentDateTime.getTime() - now.getTime();
 
     if (diff < 0) return null;
 
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const hoursLeft = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutesLeft = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-    return { days, hours, minutes };
+    return { days, hours: hoursLeft, minutes: minutesLeft };
+  };
+
+  // Format date for display - use local timezone like medical-history
+  const formatDate = (dateStr: string | undefined | null) => {
+    if (!dateStr || typeof dateStr !== 'string') return 'No Date';
+    const date = new Date(dateStr); // correctly converts UTC to local time
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   const countdown = getCountdown();
@@ -278,7 +306,7 @@ export default function PatientDashboard() {
                 <span className="font-medium">{stats.nextAppointment.doctorName}</span>
               </div>
               <p className="text-sm text-text-gray">
-                {stats.nextAppointment.appointmentDate} at {stats.nextAppointment.startTime}
+                {formatDate(stats.nextAppointment.appointmentDate)} at {stats.nextAppointment.startTime}
               </p>
             </div>
             <Button 
@@ -339,10 +367,10 @@ export default function PatientDashboard() {
               >
                 <div className="w-16 h-16 bg-primary-cyan/10 rounded-lg flex flex-col items-center justify-center">
                   <span className="text-lg font-bold text-primary-cyan">
-                    {new Date(apt.appointmentDate).getDate()}
+                    {formatDate(apt.appointmentDate).split(',')[1]?.trim().split(' ')[1] || new Date(apt.appointmentDate).getDate()}
                   </span>
                   <span className="text-xs text-primary-cyan">
-                    {new Date(apt.appointmentDate).toLocaleString('default', { month: 'short' })}
+                    {formatDate(apt.appointmentDate).split(',')[0]?.trim().split(' ')[0] || new Date(apt.appointmentDate).toLocaleString('default', { month: 'short' })}
                   </span>
                 </div>
                 <div className="flex-1">

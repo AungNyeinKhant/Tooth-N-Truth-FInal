@@ -8,7 +8,7 @@ import { API_ENDPOINTS } from "@/lib/constants";
 const getRedirectUrl = (role: string): string => {
   switch (role) {
     case "PATIENT":
-      return "/";
+      return "/patient/dashboard";
 
     case "BRANCH_MANAGER":
       return "/branch-manager/dashboard";

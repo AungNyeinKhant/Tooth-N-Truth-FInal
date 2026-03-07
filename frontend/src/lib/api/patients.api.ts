@@ -86,7 +86,11 @@ export async function getMyUpcomingAppointments(limit: number = 5): Promise<Pati
   const response = await apiClient.get(`${API_ENDPOINTS.PATIENTS}/me/appointments/upcoming`, {
     params: { limit },
   });
-  return response.data.data;
+  // Response structure: { success: true, data: { data: [...] } }
+  // So we need response.data.data.data to get the array
+  const nestedData = response.data?.data;
+  const data = nestedData?.data || nestedData;
+  return Array.isArray(data) ? data : [];
 }
 
 /**

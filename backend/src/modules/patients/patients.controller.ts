@@ -92,10 +92,12 @@ export class PatientsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMyUpcomingAppointments(
     @CurrentUser('sub') userId: string,
-    @Query('limit') limit?: number,
+    @Query('limit') limit?: string,
   ) {
     const patientId = await this.getPatientIdFromUserId(userId);
-    const appointments = await this.patientsService.getUpcomingAppointments(patientId, limit || 5);
+    const limitNum = limit ? parseInt(limit, 10) : 5;
+    console.log('[getMyUpcomingAppointments] limit:', limit, '->', limitNum);
+    const appointments = await this.patientsService.getUpcomingAppointments(patientId, limitNum);
     return { data: appointments };
   }
 
