@@ -328,6 +328,7 @@ export class PatientsService {
   async updatePatientProfile(
     userId: string,
     data: {
+      email?: string;
       firstName?: string;
       lastName?: string;
       phone?: string;
@@ -347,8 +348,19 @@ export class PatientsService {
       throw new NotFoundException('Patient profile not found');
     }
 
-    // Update user fields
+    // Check if email is being changed and if it's already taken
+    if (data.email && data.email !== user.email) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: data.email },
+      });
+      if (existingUser && existingUser.id !== userId) {
+        throw new Error('Email is already in use by another account');
+      }
+    }
+
+    // Update user fields (including email if changed)
     const updateData: any = {};
+    if (data.email) updateData.email = data.email;
     if (data.firstName) updateData.firstName = data.firstName;
     if (data.lastName) updateData.lastName = data.lastName;
     if (data.phone) updateData.phone = data.phone;

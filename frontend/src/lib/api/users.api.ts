@@ -104,4 +104,12 @@ export const usersApi = {
     console.log('[Users API] Resetting password:', id);
     return apiClient.post<ResetPasswordResponse>(`${API_ENDPOINTS.USERS}/${id}/reset-password`);
   },
+
+  changePassword: (currentPassword: string, newPassword: string) => {
+    console.log('[Users API] Changing own password');
+    return apiClient.patch<{ message: string }>(`${API_ENDPOINTS.USERS}/me/password`, {
+      currentPassword,
+      newPassword,
+    });
+  },
 };

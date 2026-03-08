@@ -62,6 +62,7 @@ export class PatientsController {
   async updateMyProfile(
     @CurrentUser('sub') userId: string,
     @Body() data: {
+      email?: string;
       firstName?: string;
       lastName?: string;
       phone?: string;

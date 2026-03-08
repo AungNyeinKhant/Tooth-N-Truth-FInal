@@ -102,4 +102,19 @@ export class UsersController {
   async resetPassword(@Param('id') id: string) {
     return this.usersService.resetPassword(id);
   }
+
+  // ========== User Self-Endpoints ==========
+
+  @Patch('me/password')
+  @ApiOperation({ summary: 'Change own password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid current password' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async changeMyPassword(
+    @CurrentUser('sub') userId: string,
+    @Body() data: { currentPassword: string; newPassword: string },
+  ) {
+    return this.usersService.changePassword(userId, data.currentPassword, data.newPassword);
+  }
 }
