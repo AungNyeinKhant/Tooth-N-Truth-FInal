@@ -49,4 +49,5 @@ export interface RegisterData {
   dateOfBirth?: string;
   address?: string;
   emergencyContact?: string;
+  profileImage?: string;
 }

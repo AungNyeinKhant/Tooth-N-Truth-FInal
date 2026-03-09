@@ -99,6 +99,7 @@ export class AuthService {
         firstName: registerDto.firstName,
         lastName: registerDto.lastName,
         phone: registerDto.phone,
+        profileImage: registerDto.profileImage || null,
         patient: {
           create: {
             dateOfBirth: registerDto.dateOfBirth

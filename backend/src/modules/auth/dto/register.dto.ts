@@ -79,4 +79,12 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   emergencyContact?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://res.cloudinary.com/.../image.jpg',
+    description: 'Profile image URL (upload image first, then use URL here)',
+  })
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
 }

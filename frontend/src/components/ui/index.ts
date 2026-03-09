@@ -5,3 +5,4 @@ export * from './card';
 export * from './badge';
 export * from './toast';
 export * from './modal';
+export * from './image-upload';

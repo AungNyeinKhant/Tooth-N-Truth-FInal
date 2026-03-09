@@ -102,14 +102,16 @@ export default function ProfilePage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedTypes.includes(file.type)) {
-      addToast('Please select a valid image file', 'error');
+      addToast('Invalid file type. Allowed: PNG, JPG, JPEG, WebP, GIF', 'error');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      addToast('File size must be less than 5MB', 'error');
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      addToast('File size must be less than 2MB', 'error');
       return;
     }
 

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Button, Input, Card } from '@/components/ui';
+import { Button, Input, Card, ImageUpload } from '@/components/ui';
 import { useAuthStore, useUIStore } from '@/stores';
 import { Mail, Lock, User, Phone } from 'lucide-react';
 import { API_BASE_URL, API_ENDPOINTS } from '@/lib/constants/api';
+import apiClient from '@/lib/api/axios-instance';
 
 function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -23,6 +24,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { register, isLoading, error, clearError } = useAuthStore();
   const { addToast } = useUIStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -30,16 +32,53 @@ export default function RegisterPage() {
     firstName: '',
     lastName: '',
     phone: '',
+    profileImage: null as string | null,
   });
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const handleImageChange = (url: string | null) => {
+    setPreviewUrl(url);
+    setFormData({ ...formData, profileImage: url });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
     
     try {
-      const redirectUrl = await register(formData);
+      let profileImageUrl = formData.profileImage;
+
+      // If there's a preview image (newly selected), upload it first
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        addToast('Uploading profile image...', 'info');
+        
+        // Get the file from the input
+        const file = fileInputRef.current?.files?.[0];
+        if (file) {
+          const formDataUpload = new FormData();
+          formDataUpload.append('file', file);
+          
+          try {
+            const uploadRes = await apiClient.post('/api/upload/single?folder=tnt-clinic/patients', formDataUpload, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            profileImageUrl = uploadRes.data.data.url;
+          } catch (uploadError: any) {
+            console.error('Image upload failed:', uploadError);
+            addToast('Failed to upload profile image. Registration will continue without it.', 'warning');
+            profileImageUrl = null;
+          }
+        }
+      }
+
+      // Register with profile image URL
+      await register({
+        ...formData,
+        profileImage: profileImageUrl || undefined,
+      });
+      
       addToast('Registration successful! Welcome to Tooth & Truth.', 'success');
-      router.push(redirectUrl);
+      router.push('/dashboard');
     } catch (error) {
       // Error is handled by the store
     }
@@ -54,6 +93,30 @@ export default function RegisterPage() {
             Join Tooth & Truth and start your dental care journey
           </p>
         </div>
+
+        {/* Profile Image Upload */}
+        <div className="flex justify-center mb-6">
+          <ImageUpload 
+            value={previewUrl || undefined} 
+            onChange={handleImageChange}
+          />
+        </div>
+
+        {/* Hidden file input for image upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const url = URL.createObjectURL(file);
+              setPreviewUrl(url);
+              setFormData({ ...formData, profileImage: url });
+            }
+          }}
+        />
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
