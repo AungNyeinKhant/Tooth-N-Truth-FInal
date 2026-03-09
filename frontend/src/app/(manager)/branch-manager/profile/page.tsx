@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button, Input } from "@/components/ui";
 import { useAuthStore, useUIStore } from "@/stores";
-import { User, Mail, Phone, Camera, Loader2, Lock, Save, X, Shield } from "lucide-react";
+import { User, Mail, Phone, Camera, Loader2, Lock, Save, X, Building } from "lucide-react";
 import { usersApi } from "@/lib/api/users.api";
 import apiClient from "@/lib/api/axios-instance";
 
-export default function AdminSettingsPage() {
+export default function ManagerProfilePage() {
   const router = useRouter();
   const { user, checkAuth, isLoading: authLoading } = useAuthStore();
   const { addToast } = useUIStore();
@@ -36,15 +36,13 @@ export default function AdminSettingsPage() {
   const [passwordError, setPasswordError] = useState("");
 
   // Initialize form with user data
-  useEffect(() => {
-    if (user) {
-      setEditForm({
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        phone: user.phone || "",
-      });
-    }
-  }, [user]);
+  if (!authLoading && user && !editForm.firstName) {
+    setEditForm({
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      phone: user.phone || "",
+    });
+  }
 
   const handleProfileImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -86,7 +84,7 @@ export default function AdminSettingsPage() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
-
+    
     setIsLoading(true);
     try {
       await usersApi.update(user.id, {
@@ -154,39 +152,37 @@ export default function AdminSettingsPage() {
     return null;
   }
 
-  const displayName = user?.firstName || user?.email?.split("@")[0] || "Admin";
+  const displayName = user?.firstName || user?.email?.split("@")[0] || "Manager";
+  const branchName = (user as any)?.branchManager?.branch?.name || "Your Branch";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500">Manage your profile and account settings</p>
-      </div>
+    <div className="container-app py-8 max-w-3xl">
+      <h1 className="text-3xl font-bold text-text-navy mb-8">My Profile</h1>
 
       {/* Profile Image Section */}
-      <Card>
+      <Card className="mb-6">
         <div className="flex flex-col md:flex-row items-center gap-6">
           <div className="relative">
             {user.profileImage ? (
               <img
                 src={user.profileImage}
                 alt="Profile"
-                className="w-24 h-24 rounded-full object-cover border-4 border-primary-cyan/20"
+                className="w-32 h-32 rounded-full object-cover border-4 border-primary-cyan/20"
               />
             ) : (
-              <div className="w-24 h-24 rounded-full bg-primary-cyan/10 flex items-center justify-center border-4 border-primary-cyan/20">
-                <User className="w-12 h-12 text-primary-cyan" />
+              <div className="w-32 h-32 rounded-full bg-primary-cyan/10 flex items-center justify-center border-4 border-primary-cyan/20">
+                <User className="w-16 h-16 text-primary-cyan" />
               </div>
             )}
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="absolute bottom-0 right-0 w-8 h-8 bg-primary-cyan text-white rounded-full flex items-center justify-center hover:bg-primary-cyan/90 disabled:opacity-50 transition-colors"
+              className="absolute bottom-0 right-0 w-10 h-10 bg-primary-cyan text-white rounded-full flex items-center justify-center hover:bg-primary-cyan/90 disabled:opacity-50 transition-colors"
             >
               {isUploading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Camera className="w-4 h-4" />
+                <Camera className="w-5 h-5" />
               )}
             </button>
             <input
@@ -198,20 +194,23 @@ export default function AdminSettingsPage() {
             />
           </div>
           <div className="text-center md:text-left">
-            <h2 className="text-xl font-bold text-gray-900">{displayName}</h2>
-            <p className="text-sm text-gray-500">{user.email}</p>
-            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-              <Shield className="w-4 h-4" />
-              Admin
+            <h2 className="text-2xl font-bold text-text-navy">{displayName}</h2>
+            <p className="text-text-gray">{user.email}</p>
+            <div className="flex items-center gap-2 mt-2 text-sm text-text-gray">
+              <Building className="w-4 h-4" />
+              <span>{branchName}</span>
+            </div>
+            <div className="mt-2 inline-block px-3 py-1 bg-primary-cyan/10 text-primary-cyan rounded-full text-sm font-medium">
+              Branch Manager
             </div>
           </div>
         </div>
       </Card>
 
       {/* Personal Information */}
-      <Card>
+      <Card className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+          <h3 className="text-xl font-semibold text-text-navy">Personal Information</h3>
           {!isEditing && (
             <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
               Edit
@@ -222,7 +221,7 @@ export default function AdminSettingsPage() {
         {isEditing ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-text-gray mb-1">
                 First Name
               </label>
               <Input
@@ -233,7 +232,7 @@ export default function AdminSettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-text-gray mb-1">
                 Last Name
               </label>
               <Input
@@ -244,7 +243,7 @@ export default function AdminSettingsPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <label className="block text-sm font-medium text-text-gray mb-1">Phone</label>
               <Input
                 type="text"
                 value={editForm.phone}
@@ -281,26 +280,33 @@ export default function AdminSettingsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-3">
-              <Mail className="w-5 h-5 text-gray-400" />
+              <Mail className="w-5 h-5 text-text-gray" />
               <div>
-                <p className="text-sm text-gray-500">Email</p>
-                <p className="font-medium text-gray-900">{user.email}</p>
+                <p className="text-sm text-text-gray">Email</p>
+                <p className="font-medium">{user.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <User className="w-5 h-5 text-gray-400" />
+              <User className="w-5 h-5 text-text-gray" />
               <div>
-                <p className="text-sm text-gray-500">Name</p>
-                <p className="font-medium text-gray-900">
+                <p className="text-sm text-text-gray">Name</p>
+                <p className="font-medium">
                   {user.firstName} {user.lastName}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Phone className="w-5 h-5 text-gray-400" />
+              <Phone className="w-5 h-5 text-text-gray" />
               <div>
-                <p className="text-sm text-gray-500">Phone</p>
-                <p className="font-medium text-gray-900">{user.phone || "-"}</p>
+                <p className="text-sm text-text-gray">Phone</p>
+                <p className="font-medium">{user.phone || "-"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Building className="w-5 h-5 text-text-gray" />
+              <div>
+                <p className="text-sm text-text-gray">Branch</p>
+                <p className="font-medium">{branchName}</p>
               </div>
             </div>
           </div>
@@ -309,11 +315,11 @@ export default function AdminSettingsPage() {
 
       {/* Change Password */}
       <Card>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Password</h3>
+        <h3 className="text-xl font-semibold text-text-navy mb-4">Change Password</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-gray mb-1">
               Current Password
             </label>
             <Input
@@ -326,7 +332,7 @@ export default function AdminSettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-gray mb-1">
               New Password
             </label>
             <Input
@@ -339,7 +345,7 @@ export default function AdminSettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-gray mb-1">
               Confirm New Password
             </label>
             <Input
@@ -373,7 +379,7 @@ export default function AdminSettingsPage() {
               )}
               Change Password
             </Button>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-text-gray mt-2">
               Note: You will be logged out after changing password and need to login again.
             </p>
           </div>

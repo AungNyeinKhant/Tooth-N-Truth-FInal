@@ -40,18 +40,20 @@ export class DoctorsService {
     const [items, total] = await Promise.all([
       this.prisma.doctor.findMany({
         where,
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          specialization: true,
-          phone: true,
-          email: true,
-          bio: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          branch: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        bio: true,
+        isActive: true,
+        profileImage: true,
+        createdAt: true,
+        updatedAt: true,
+        branchId: true,
+        branch: {
             select: {
               id: true,
               name: true,
@@ -331,6 +333,7 @@ export class DoctorsService {
         bio: createDoctorDto.bio,
         branchId: createDoctorDto.branchId,
         isActive: createDoctorDto.isActive ?? true,
+        profileImage: createDoctorDto.profileImage || null,
       },
       select: {
         id: true,
@@ -341,6 +344,7 @@ export class DoctorsService {
         email: true,
         bio: true,
         isActive: true,
+        profileImage: true,
         createdAt: true,
         updatedAt: true,
         branchId: true,
@@ -398,6 +402,7 @@ export class DoctorsService {
         bio: updateDoctorDto.bio,
         branchId: updateDoctorDto.branchId,
         isActive: updateDoctorDto.isActive,
+        profileImage: updateDoctorDto.profileImage,
       },
       select: {
         id: true,
@@ -408,6 +413,7 @@ export class DoctorsService {
         email: true,
         bio: true,
         isActive: true,
+        profileImage: true,
         createdAt: true,
         updatedAt: true,
         branchId: true,

@@ -14,6 +14,7 @@ import {
   LogOut,
   BarChart3,
   CalendarClock,
+  Settings,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -57,6 +58,11 @@ const navigation = [
     name: "Users",
     href: "/admin/users",
     icon: Users,
+  },
+  {
+    name: "Settings",
+    href: "/admin/settings",
+    icon: Settings,
   },
 ];
 

@@ -10,6 +10,7 @@ export interface Doctor {
   email: string | null;
   bio: string | null;
   isActive: boolean;
+  profileImage?: string | null;
   createdAt: string;
   updatedAt: string;
   branchId?: string;
@@ -59,6 +60,7 @@ export interface CreateDoctorData {
   bio?: string;
   branchId: string;
   isActive?: boolean;
+  profileImage?: string;
 }
 
 export interface UpdateDoctorData {
@@ -70,6 +72,7 @@ export interface UpdateDoctorData {
   bio?: string;
   branchId?: string;
   isActive?: boolean;
+  profileImage?: string;
 }
 
 export const doctorsApi = {

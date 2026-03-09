@@ -9,6 +9,7 @@ import {
   User,
   ChevronDown,
   Shield,
+  Settings,
 } from "lucide-react";
 
 export function AdminHeader() {
@@ -31,6 +32,11 @@ export function AdminHeader() {
   const handleLogout = async () => {
     await logout();
     router.push("/login");
+  };
+
+  const handleSettings = () => {
+    router.push("/admin/settings");
+    setIsDropdownOpen(false);
   };
 
   return (
@@ -85,6 +91,13 @@ export function AdminHeader() {
             </div>
 
             {/* Logout */}
+            <button
+              onClick={handleSettings}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Settings className="w-4 h-4 text-gray-400" />
+              <span>Settings</span>
+            </button>
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"

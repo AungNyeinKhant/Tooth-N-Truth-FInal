@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,8 +9,9 @@ import { doctorsApi, UpdateDoctorData, Doctor } from "@/lib/api/doctors.api";
 import { branchesApi } from "@/lib/api/branches.api";
 import { useUIStore } from "@/stores";
 import { Button, Input, Textarea } from "@/components/ui";
-import { UserRound, ArrowLeft, Loader2 } from "lucide-react";
+import { UserRound, ArrowLeft, Loader2, Camera } from "lucide-react";
 import { getErrorMessage } from "@/lib/utils";
+import apiClient from "@/lib/api/axios-instance";
 
 const doctorSchema = z.object({
   firstName: z
@@ -60,6 +61,11 @@ export default function EditDoctorPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
+  
+  // Profile image state
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -126,6 +132,9 @@ export default function EditDoctorPage() {
           branchId: doctor.branchId || "",
           isActive: doctor.isActive,
         });
+        
+        // Set existing profile image
+        setProfileImage(doctor.profileImage || null);
       } catch (error) {
         console.error("Failed to fetch doctor:", error);
         addToast("Failed to load doctor data", "error");
@@ -140,6 +149,54 @@ export default function EditDoctorPage() {
     }
   }, [doctorId, reset, addToast, router]);
 
+  // Handle profile image upload
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      addToast('Invalid file type. Allowed: PNG, JPG, JPEG, WebP, GIF', 'error');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      addToast('File size must be less than 2MB', 'error');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await apiClient.post('/api/upload/single?folder=tnt-clinic/doctors', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      const imageUrl = response.data.data.url;
+      setProfileImage(imageUrl);
+      addToast('Profile image uploaded successfully', 'success');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      addToast(error.response?.data?.message || 'Failed to upload image', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Handle remove profile image
+  const handleRemoveImage = () => {
+    setProfileImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const onSubmit = async (data: DoctorFormData) => {
     setIsSubmitting(true);
     try {
@@ -152,6 +209,7 @@ export default function EditDoctorPage() {
         bio: data.bio || undefined,
         branchId: data.branchId,
         isActive: data.isActive,
+        profileImage: profileImage || undefined,
       };
 
       await doctorsApi.update(doctorId, updateData);
@@ -195,6 +253,69 @@ export default function EditDoctorPage() {
 
       {/* Form */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Profile Image Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Camera className="w-5 h-5 text-teal-600" />
+            Profile Image
+          </h2>
+
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              {profileImage ? (
+                <img
+                  src={profileImage}
+                  alt="Profile preview"
+                  className="w-24 h-24 rounded-full object-cover border-4 border-primary-cyan/20"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center border-4 border-gray-200">
+                  <UserRound className="w-10 h-10 text-gray-400" />
+                </div>
+              )}
+              
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="absolute bottom-0 right-0 w-8 h-8 bg-primary-cyan text-white rounded-full flex items-center justify-center hover:bg-primary-cyan/90 disabled:opacity-50 transition-colors"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4" />
+                )}
+              </button>
+              
+              {profileImage && (
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                >
+                  <span className="sr-only">Remove</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            
+            <div className="text-sm text-gray-500">
+              <p>Upload a profile photo</p>
+              <p>PNG, JPG, JPEG, WebP, GIF • Max 2MB</p>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+          </div>
+        </div>
+
         {/* Doctor Information Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
