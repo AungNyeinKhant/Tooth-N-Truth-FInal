@@ -17,7 +17,10 @@ import {
   X,
   Link,
   Unlink,
-  AlertTriangle
+  AlertTriangle,
+  CalendarCheck,
+  CalendarX,
+  RefreshCw
 } from 'lucide-react';
 import { 
   getMyProfile, 
@@ -26,6 +29,7 @@ import {
   PatientProfile
 } from '@/lib/api/patients.api';
 import { usersApi } from '@/lib/api/users.api';
+import { calendarApi, CalendarStatus } from '@/lib/api/calendar.api';
 
 interface GoogleStatus {
   isLinked: boolean;
@@ -85,6 +89,13 @@ export default function ProfilePage() {
   const [googleSetPasswordError, setGoogleSetPasswordError] = useState('');
   const [isSettingPassword, setIsSettingPassword] = useState(false);
 
+  // Google Calendar integration
+  const [calendarStatus, setCalendarStatus] = useState<CalendarStatus | null>(null);
+  const [isLoadingCalendarStatus, setIsLoadingCalendarStatus] = useState(false);
+  const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
+  const [isDisconnectingCalendar, setIsDisconnectingCalendar] = useState(false);
+  const [isTogglingSync, setIsTogglingSync] = useState(false);
+
   // Fetch profile on mount
   useEffect(() => {
     const init = async () => {
@@ -97,6 +108,7 @@ export default function ProfilePage() {
   // Handle query params from OAuth redirect
   useEffect(() => {
     const linked = searchParams.get('linked');
+    const calendar = searchParams.get('calendar');
     const error = searchParams.get('error');
     
     if (linked === 'true') {
@@ -105,8 +117,12 @@ export default function ProfilePage() {
       checkAuth();
       // Remove query param from URL
       router.replace('/profile');
+    } else if (calendar === 'connected') {
+      addToast('Google Calendar connected successfully!', 'success');
+      fetchCalendarStatus();
+      router.replace('/profile');
     } else if (error) {
-      addToast(`Failed to link Google account: ${error}`, 'error');
+      addToast(`Failed to connect: ${error}`, 'error');
       router.replace('/profile');
     }
   }, [searchParams]);
@@ -116,6 +132,7 @@ export default function ProfilePage() {
     if (!authLoading && user) {
       fetchProfile();
       fetchGoogleStatus();
+      fetchCalendarStatus();
     }
   }, [authLoading, user]);
 
@@ -145,14 +162,26 @@ export default function ProfilePage() {
     setIsLoadingGoogleStatus(true);
     try {
       const response = await usersApi.getGoogleStatus();
-      // Backend returns { success: true, data: {...} }, axios unwraps to response.data
-      const statusData = response.data.data;
-      setGoogleStatus(statusData);
-      console.log('[Profile] Google status:', statusData);
+      setGoogleStatus(response.data);
+      console.log('[Profile] Google status:', response.data);
     } catch (error: any) {
       console.error('Error fetching Google status:', error);
     } finally {
       setIsLoadingGoogleStatus(false);
+    }
+  };
+
+  // Fetch Calendar status
+  const fetchCalendarStatus = async () => {
+    setIsLoadingCalendarStatus(true);
+    try {
+      const response = await calendarApi.getStatus();
+      setCalendarStatus(response.data);
+      console.log('[Profile] Calendar status:', response.data);
+    } catch (error: any) {
+      console.error('Error fetching calendar status:', error);
+    } finally {
+      setIsLoadingCalendarStatus(false);
     }
   };
 
@@ -322,6 +351,53 @@ export default function ProfilePage() {
       setGoogleSetPasswordError(error.response?.data?.message || 'Failed to set password');
     } finally {
       setIsSettingPassword(false);
+    }
+  };
+
+  // Handle connecting Google Calendar
+  const handleConnectCalendar = async () => {
+    setIsConnectingCalendar(true);
+    try {
+      const response = await calendarApi.getConnectUrl();
+      const { url } = response.data;
+      window.location.href = url;
+    } catch (error: any) {
+      console.error('Error getting calendar connect URL:', error);
+      addToast('Failed to get calendar connection URL', 'error');
+      setIsConnectingCalendar(false);
+    }
+  };
+
+  // Handle disconnecting Google Calendar
+  const handleDisconnectCalendar = async () => {
+    setIsDisconnectingCalendar(true);
+    try {
+      await calendarApi.disconnect();
+      addToast('Google Calendar disconnected successfully', 'success');
+      fetchCalendarStatus();
+    } catch (error: any) {
+      console.error('Error disconnecting calendar:', error);
+      addToast(error.response?.data?.message || 'Failed to disconnect calendar', 'error');
+    } finally {
+      setIsDisconnectingCalendar(false);
+    }
+  };
+
+  // Handle toggling calendar sync
+  const handleToggleSync = async () => {
+    if (!calendarStatus) return;
+    
+    setIsTogglingSync(true);
+    try {
+      const newEnabled = !calendarStatus.syncEnabled;
+      await calendarApi.toggleSync(newEnabled);
+      addToast(`Calendar sync ${newEnabled ? 'enabled' : 'disabled'}`, 'success');
+      fetchCalendarStatus();
+    } catch (error: any) {
+      console.error('Error toggling calendar sync:', error);
+      addToast(error.response?.data?.message || 'Failed to toggle sync', 'error');
+    } finally {
+      setIsTogglingSync(false);
     }
   };
 
@@ -767,6 +843,126 @@ export default function ProfilePage() {
           </div>
         ) : (
           <p className="text-gray-500">Unable to load Google account status</p>
+        )}
+      </Card>
+
+      {/* Google Calendar Integration */}
+      <Card className="mb-6">
+        <h3 className="text-xl font-semibold text-text-navy mb-4">Google Calendar</h3>
+        
+        {isLoadingCalendarStatus ? (
+          <div className="flex items-center gap-2 text-gray-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Loading...
+          </div>
+        ) : calendarStatus ? (
+          <div className="space-y-4">
+            {/* Connected Status */}
+            {calendarStatus.isConnected && (
+              <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
+                  <CalendarCheck className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-blue-800">Google Calendar Connected</p>
+                  <p className="text-sm text-blue-600">
+                    {calendarStatus.syncEnabled 
+                      ? 'Auto-sync is enabled - appointments will be added to your calendar' 
+                      : 'Auto-sync is disabled'}
+                  </p>
+                  {calendarStatus.lastSyncAt && (
+                    <p className="text-xs text-blue-500 mt-1">
+                      Last synced: {new Date(calendarStatus.lastSyncAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+                <Badge variant={calendarStatus.syncEnabled ? "success" : "secondary"}>
+                  {calendarStatus.syncEnabled ? "Sync On" : "Sync Off"}
+                </Badge>
+              </div>
+            )}
+
+            {/* Not Connected Status */}
+            {!calendarStatus.isConnected && (
+              <div className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-full">
+                  <CalendarX className="w-6 h-6 text-gray-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-gray-700">Google Calendar Not Connected</p>
+                  <p className="text-sm text-gray-500">Connect your calendar to sync appointments with reminders</p>
+                </div>
+                <Badge variant="secondary">Not Connected</Badge>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3">
+              {/* Connect Calendar Button */}
+              {!calendarStatus.isConnected && (
+                <Button
+                  variant="outline"
+                  onClick={handleConnectCalendar}
+                  disabled={isConnectingCalendar}
+                  className="flex items-center gap-2"
+                >
+                  {isConnectingCalendar ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Link className="w-4 h-4" />
+                  )}
+                  Connect Google Calendar
+                </Button>
+              )}
+
+              {/* Toggle Sync Button (only when connected) */}
+              {calendarStatus.isConnected && (
+                <Button
+                  variant="outline"
+                  onClick={handleToggleSync}
+                  disabled={isTogglingSync}
+                  className="flex items-center gap-2"
+                >
+                  {isTogglingSync ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  {calendarStatus.syncEnabled ? 'Disable Sync' : 'Enable Sync'}
+                </Button>
+              )}
+
+              {/* Disconnect Calendar Button */}
+              {calendarStatus.isConnected && (
+                <Button
+                  variant="outline"
+                  onClick={handleDisconnectCalendar}
+                  disabled={isDisconnectingCalendar}
+                  className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  {isDisconnectingCalendar ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Unlink className="w-4 h-4" />
+                  )}
+                  Disconnect
+                </Button>
+              )}
+            </div>
+
+            {/* Info about reminders */}
+            {calendarStatus.isConnected && calendarStatus.syncEnabled && (
+              <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">
+                <p className="font-medium text-gray-700 mb-1">Calendar Reminders:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Email reminder 24 hours before appointment</li>
+                  <li>Popup reminder 1 hour before appointment</li>
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-gray-500">Unable to load calendar status</p>
         )}
       </Card>
 

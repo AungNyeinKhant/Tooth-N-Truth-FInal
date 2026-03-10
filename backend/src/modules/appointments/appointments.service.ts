@@ -3,10 +3,13 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { UserRole } from '../../shared/enums';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
+import { CalendarService } from '../calendar/calendar.service';
 
 export interface AdminAppointmentsQuery {
   status?: string;
@@ -22,7 +25,11 @@ export interface AdminAppointmentsQuery {
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => CalendarService))
+    private calendarService: CalendarService,
+  ) {}
 
   async getAdminAppointments(query: AdminAppointmentsQuery): Promise<{ items: any[]; total: number }> {
     const {
@@ -382,6 +389,7 @@ export class AppointmentsService {
           include: {
             user: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
                 email: true,
@@ -407,6 +415,38 @@ export class AppointmentsService {
         },
       },
     });
+
+    // Update Google Calendar event if exists
+    try {
+      const patientUserId = updated.patient.user.id;
+      const calendarStatus = await this.calendarService.getCalendarStatus(patientUserId);
+      
+      if (calendarStatus.isConnected && calendarStatus.syncEnabled && updated.googleCalendarEventId) {
+        // Calculate new start and end Date objects
+        const [startHours, startMinutes] = startTime.split(':').map(Number);
+        const [endHours, endMinutes] = endTime.split(':').map(Number);
+        
+        const eventStartTime = new Date(dateObj);
+        eventStartTime.setHours(startHours, startMinutes, 0, 0);
+        
+        const eventEndTime = new Date(dateObj);
+        eventEndTime.setHours(endHours, endMinutes, 0, 0);
+
+        await this.calendarService.updateCalendarEvent(
+          patientUserId,
+          id,
+          {
+            summary: `Dental Appointment - ${updated.service.name}`,
+            description: `Appointment with Dr. ${updated.doctor.firstName} ${updated.doctor.lastName}.\n\nNotes: ${updated.notes || 'None'}`,
+            startTime: eventStartTime,
+            endTime: eventEndTime,
+          },
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the reschedule
+      console.error('Failed to update calendar event:', error);
+    }
 
     return updated;
   }
@@ -922,6 +962,17 @@ export class AppointmentsService {
         status: 'CONFIRMED',
       },
       include: {
+        patient: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
         doctor: {
           select: {
             firstName: true,
@@ -931,6 +982,7 @@ export class AppointmentsService {
         branch: {
           select: {
             name: true,
+            address: true,
           },
         },
         service: {
@@ -940,6 +992,36 @@ export class AppointmentsService {
         },
       },
     });
+
+    // Create Google Calendar event if patient has calendar connected and sync enabled
+    try {
+      const calendarStatus = await this.calendarService.getCalendarStatus(userId);
+      if (calendarStatus.isConnected && calendarStatus.syncEnabled) {
+        // Calculate start and end Date objects
+        const [startHours, startMinutes] = startTime.split(':').map(Number);
+        const [endHours, endMinutes] = endTime.split(':').map(Number);
+        
+        const eventStartTime = new Date(dateObj);
+        eventStartTime.setHours(startHours, startMinutes, 0, 0);
+        
+        const eventEndTime = new Date(dateObj);
+        eventEndTime.setHours(endHours, endMinutes, 0, 0);
+
+        await this.calendarService.createCalendarEvent(
+          userId,
+          appointment.id,
+          {
+            summary: `Dental Appointment - ${appointment.service.name}`,
+            description: `Appointment with Dr. ${appointment.doctor.firstName} ${appointment.doctor.lastName} at ${appointment.branch.name}.\n\nNotes: ${notes || 'None'}`,
+            startTime: eventStartTime,
+            endTime: eventEndTime,
+          },
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the appointment creation
+      console.error('Failed to create calendar event:', error);
+    }
 
     return appointment;
   }
@@ -1050,6 +1132,17 @@ export class AppointmentsService {
         cancelReason: reason,
       },
     });
+
+    // Delete Google Calendar event if exists
+    try {
+      const calendarStatus = await this.calendarService.getCalendarStatus(userId);
+      if (calendarStatus.isConnected && appointment.googleCalendarEventId) {
+        await this.calendarService.deleteCalendarEvent(userId, id);
+      }
+    } catch (error) {
+      // Log error but don't fail the cancellation
+      console.error('Failed to delete calendar event:', error);
+    }
 
     return updated;
   }
