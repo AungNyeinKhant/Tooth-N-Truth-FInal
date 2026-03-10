@@ -19,9 +19,25 @@ export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
       callbackURL:
         configService.get<string>("GOOGLE_CALLBACK_URL") ||
         "http://localhost:3001/api/auth/google/callback",
-      scope: ["email", "profile"],
-      prompt: "select_account",
+      scope: [
+        "email", 
+        "profile",
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/calendar.events",
+      ],
+      accessType: "offline",
+      prompt: "consent",
+      selectAccount: true,
     });
+  }
+
+  authorizationParams(options: any = {}): { [key: string]: string } {
+    return {
+      ...super.authorizationParams(options),
+      access_type: 'offline',
+      prompt: 'consent',
+      select_account: 'true',
+    };
   }
 
   async validate(

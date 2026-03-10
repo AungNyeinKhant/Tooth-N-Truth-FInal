@@ -13,7 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiCookieAuth } from
 import { Request, Response } from 'express';
 
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterDto } from './dto';
+import { LoginDto, RegisterDto, SetPasswordDto } from './dto';
 import { Public } from '../../core/decorators';
 import { CurrentUser } from '../../core/decorators';
 import { GoogleOAuthGuard } from '../../core/guards';
@@ -141,7 +141,7 @@ export class AuthController {
   @UseGuards(GoogleOAuthGuard)
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
   async googleAuth() {
-    // GoogleOAuthGuard initiates the flow automatically
+    // GoogleOAuthGuard initiates the OAuth flow automatically
   }
 
   @Public()
@@ -150,8 +150,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Handle Google OAuth callback' })
   async googleAuthRedirect(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     if (!req.user) {
-      // Redirect to frontend login with error (placeholder frontend URL handling)
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      // Redirect to frontend login with error (frontend runs on port 3001)
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
       return res.redirect(`${frontendUrl}/login?error=GoogleLoginFailed`);
     }
 
@@ -162,7 +162,41 @@ export class AuthController {
     this.setRefreshTokenCookie(res, result.refreshToken);
     
     // Redirect to frontend callback page with the short-lived access token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     return res.redirect(`${frontendUrl}/auth/callback?token=${result.accessToken}`);
+  }
+
+  @Post('set-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set password for Google-only user' })
+  @ApiResponse({ status: 200, description: 'Password set successfully' })
+  @ApiResponse({ status: 400, description: 'User already has a password' })
+  @ApiCookieAuth()
+  async setPassword(
+    @CurrentUser('sub') userId: string,
+    @Body() setPasswordDto: SetPasswordDto,
+  ) {
+    return this.authService.setPassword(userId, setPasswordDto.newPassword);
+  }
+
+  @Post('unlink-google')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unlink Google account from user profile' })
+  @ApiResponse({ status: 200, description: 'Google account unlinked successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot unlink - no password set' })
+  @ApiCookieAuth()
+  async unlinkGoogle(@CurrentUser('sub') userId: string) {
+    return this.authService.unlinkGoogle(userId);
+  }
+
+  @Get('google-status')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get Google account linking status' })
+  @ApiResponse({ status: 200, description: 'Google status retrieved' })
+  @ApiCookieAuth()
+  async getGoogleStatus(@CurrentUser('sub') userId: string) {
+    return this.authService.getGoogleStatus(userId);
   }
 }

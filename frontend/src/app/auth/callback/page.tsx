@@ -11,6 +11,7 @@ function CallbackContent() {
 
   useEffect(() => {
     const token = searchParams.get('token');
+    const isPopup = window.opener !== null;
     
     if (token) {
       // 1. Save token to localStorage
@@ -30,19 +31,42 @@ function CallbackContent() {
           console.log('[OAuth Callback] User loaded:', currentUser);
           console.log('[OAuth Callback] Role:', userRole);
           
-          // Redirect based on role
-          if (userRole === 'PATIENT') router.replace('/patient/dashboard');
-          else if (userRole === 'BRANCH_MANAGER') router.replace('/branch-manager/dashboard');
-          else if (userRole === 'ADMIN') router.replace('/admin/dashboard');
-          else router.replace('/');
+          // If opened as popup (for account linking), send message to opener
+          if (isPopup && window.opener) {
+            window.opener.postMessage({ type: 'googleOAuthSuccess' }, '*');
+            // Close the popup after a short delay
+            setTimeout(() => {
+              window.close();
+            }, 1000);
+          } else {
+            // Redirect based on role
+            if (userRole === 'PATIENT') router.replace('/patient/dashboard');
+            else if (userRole === 'BRANCH_MANAGER') router.replace('/branch-manager/dashboard');
+            else if (userRole === 'ADMIN') router.replace('/admin/dashboard');
+            else router.replace('/');
+          }
         })
         .catch((err) => {
           console.error('[OAuth Callback] Failed to fetch user profile:', err);
-          router.replace('/login?error=ProfileFetchFailed');
+          if (isPopup && window.opener) {
+            window.opener.postMessage({ type: 'googleOAuthError', message: 'Failed to link account' }, '*');
+            setTimeout(() => {
+              window.close();
+            }, 1000);
+          } else {
+            router.replace('/login?error=ProfileFetchFailed');
+          }
         });
     } else {
       console.error('[OAuth Callback] No token provided');
-      router.replace('/login?error=NoTokenProvided');
+      if (isPopup && window.opener) {
+        window.opener.postMessage({ type: 'googleOAuthError', message: 'No token provided' }, '*');
+        setTimeout(() => {
+          window.close();
+        }, 1000);
+      } else {
+        router.replace('/login?error=NoTokenProvided');
+      }
     }
   }, [searchParams, router, checkAuth]);
 

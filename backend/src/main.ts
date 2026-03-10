@@ -15,7 +15,7 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // File upload middleware - increase limit for profile images
-  app.useBodyParser('json', { limit: '10mb' });
+  app.useBodyParser("json", { limit: "10mb" });
 
   // Security middleware - Helmet
   app.use(
@@ -39,7 +39,12 @@ async function bootstrap() {
       origin: process.env.FRONTEND_URL || "http://localhost:3000",
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "Accept", "Content-Disposition"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Content-Disposition",
+      ],
     }),
   );
 

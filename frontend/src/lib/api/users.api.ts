@@ -112,4 +112,20 @@ export const usersApi = {
       newPassword,
     });
   },
+
+  // Google account linking
+  getGoogleStatus: () => {
+    console.log('[Users API] Getting Google status');
+    return apiClient.get<{ isLinked: boolean; googleEmail: string | null; hasPassword: boolean }>('/api/auth/google-status');
+  },
+
+  setPassword: (newPassword: string) => {
+    console.log('[Users API] Setting password');
+    return apiClient.post<{ message: string }>('/api/auth/set-password', { newPassword });
+  },
+
+  unlinkGoogle: () => {
+    console.log('[Users API] Unlinking Google account');
+    return apiClient.post<{ message: string }>('/api/auth/unlink-google');
+  },
 };

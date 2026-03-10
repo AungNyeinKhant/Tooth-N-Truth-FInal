@@ -291,4 +291,94 @@ export class AuthService {
 
     return { accessToken, refreshToken };
   }
+
+  /**
+   * Set password for a user (Google-only users who want to set a password)
+   */
+  async setPassword(userId: string, newPassword: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(ERROR_MESSAGES.AUTH.USER_NOT_FOUND);
+    }
+
+    // Check if user already has a password
+    if (user.password) {
+      throw new BadRequestException('User already has a password. Use change password instead.');
+    }
+
+    const hashedPassword = await PasswordUtil.hash(newPassword);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password set successfully' };
+  }
+
+  /**
+   * Unlink Google account from user profile
+   */
+  async unlinkGoogle(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(ERROR_MESSAGES.AUTH.USER_NOT_FOUND);
+    }
+
+    // Check if user has Google account linked
+    if (!user.googleId) {
+      throw new BadRequestException('No Google account is linked to this profile.');
+    }
+
+    // Check if user has a password (cannot unlink if Google-only)
+    if (!user.password) {
+      throw new BadRequestException(
+        'Cannot unlink Google account. Please set a password first.',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleId: null,
+        googleEmail: null,
+      },
+    });
+
+    return { message: 'Google account unlinked successfully' };
+  }
+
+  /**
+   * Get user's Google account linking status
+   */
+  async getGoogleStatus(userId: string): Promise<{
+    isLinked: boolean;
+    googleEmail: string | null;
+    hasPassword: boolean;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        googleId: true,
+        googleEmail: true,
+        password: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(ERROR_MESSAGES.AUTH.USER_NOT_FOUND);
+    }
+
+    return {
+      isLinked: !!user.googleId,
+      googleEmail: user.googleEmail,
+      hasPassword: !!user.password,
+    };
+  }
 }
