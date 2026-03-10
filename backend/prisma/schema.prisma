@@ -51,14 +51,13 @@ model Patient {
   medicalHistory  String?   @db.Text
   allergies       String?
   
-  // Google Calendar Integration
-  googleCalendarEmail     String?   // The Google account connected for calendar (can differ from login email)
-  googleRefreshToken      String?   // OAuth refresh token for background syncing
-  googleAccessToken       String?   // Cached short-lived access token (avoid re-fetching on every sync)
+  // Google Calendar Integration (using same googleEmail from User)
+  googleRefreshToken      String?   // OAuth refresh token (encrypted) for calendar
+  googleAccessToken       String?   // Cached short-lived access token (encrypted)
   googleTokenExpiresAt    DateTime? // When the cached access token expires
   googleCalendarConnected Boolean   @default(false)
   calendarSyncEnabled     Boolean   @default(false)  // User can toggle auto-sync on/off
-  lastCalendarSyncAt      DateTime? // Timestamp of last successful calendar sync (shown in profile UI)
+  lastCalendarSyncAt      DateTime? // Timestamp of last successful calendar sync
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

@@ -5,10 +5,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { UserRole } from '../../shared/enums';
 import { PasswordUtil } from '../../shared/utils';
 import { ERROR_MESSAGES } from '../../shared/constants';
+import { encrypt } from '../../shared/utils/encryption.util';
 import {
   LoginDto,
   RegisterDto,
@@ -32,6 +34,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   async login(loginDto: LoginDto): Promise<{ tokens: GeneratedTokens; user: any }> {
@@ -200,7 +203,8 @@ export class AuthService {
   }
 
   async validateOAuthLogin(profile: any) {
-    const { googleId, email, firstName, lastName, profileImage } = profile;
+    const { googleId, email, firstName, lastName, profileImage, accessToken, refreshToken } = profile;
+    const encryptionKey = this.configService.get<string>('ENCRYPTION_KEY') || 'default-key';
 
     // 1. Check if user exists with googleId
     let user = await this.prisma.user.findUnique({
@@ -220,10 +224,24 @@ export class AuthService {
           include: { patient: true, branchManager: true },
         });
       }
+      // Update tokens if provided (for re-authentication)
+      if (refreshToken && user.patient) {
+        const encryptedRefreshToken = encrypt(refreshToken, encryptionKey);
+        const encryptedAccessToken = encrypt(accessToken, encryptionKey);
+        
+        await this.prisma.patient.update({
+          where: { userId: user.id },
+          data: {
+            googleRefreshToken: encryptedRefreshToken,
+            googleAccessToken: encryptedAccessToken,
+            googleCalendarConnected: true,
+          },
+        });
+      }
       return user;
     }
 
-    // 2. Check if user exists with this email (Link Account)
+    // 2. Check if user exists with this email (Link Account or new Google login)
     user = await this.prisma.user.findUnique({
       where: { email },
       include: {
@@ -232,23 +250,67 @@ export class AuthService {
       },
     });
 
+    // Prepare data for update
+    const updateData: any = {
+      googleId,
+      googleEmail: email,
+      profileImage: user?.profileImage || profileImage,
+    };
+
+    // If patient exists and we have tokens, store them
+    let patientUpdateData: any = {};
+    if (refreshToken && user?.patient) {
+      const encryptedRefreshToken = encrypt(refreshToken, encryptionKey);
+      const encryptedAccessToken = encrypt(accessToken, encryptionKey);
+      patientUpdateData = {
+        googleRefreshToken: encryptedRefreshToken,
+        googleAccessToken: encryptedAccessToken,
+        googleCalendarConnected: true,
+      };
+    }
+
     if (user) {
+      // If user already has a googleId, this is a "relink" - update to new Google account
+      if (user.googleId && user.googleId !== googleId) {
+        // Re-linking: clear old calendar tokens and set new ones
+        patientUpdateData = {
+          ...patientUpdateData,
+          googleRefreshToken: refreshToken ? encrypt(refreshToken, encryptionKey) : null,
+          googleAccessToken: accessToken ? encrypt(accessToken, encryptionKey) : null,
+          googleCalendarConnected: !!refreshToken,
+          calendarSyncEnabled: !!refreshToken,
+        };
+      }
+
       user = await this.prisma.user.update({
         where: { id: user.id },
-        data: {
-          googleId,
-          googleEmail: email,
-          profileImage: user.profileImage || profileImage,
-        },
+        data: updateData,
         include: {
           patient: true,
           branchManager: true,
         },
       });
+
+      // Update patient tokens if exists
+      if (user.patient && Object.keys(patientUpdateData).length > 0) {
+        await this.prisma.patient.update({
+          where: { userId: user.id },
+          data: patientUpdateData,
+        });
+      }
       return user;
     }
 
     // 3. Auto-register new Patient
+    let patientData: any = {};
+    if (refreshToken) {
+      patientData = {
+        googleRefreshToken: encrypt(refreshToken, encryptionKey),
+        googleAccessToken: encrypt(accessToken, encryptionKey),
+        googleCalendarConnected: true,
+      };
+    }
+
     user = await this.prisma.user.create({
       data: {
         email,
@@ -259,7 +321,7 @@ export class AuthService {
         lastName,
         profileImage,
         patient: {
-          create: {}, // Create empty patient relation
+          create: patientData,
         },
       },
       include: {

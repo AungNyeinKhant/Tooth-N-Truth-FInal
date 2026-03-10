@@ -145,7 +145,10 @@ export default function ProfilePage() {
     setIsLoadingGoogleStatus(true);
     try {
       const response = await usersApi.getGoogleStatus();
-      setGoogleStatus(response.data);
+      // Backend returns { success: true, data: {...} }, axios unwraps to response.data
+      const statusData = response.data.data;
+      setGoogleStatus(statusData);
+      console.log('[Profile] Google status:', statusData);
     } catch (error: any) {
       console.error('Error fetching Google status:', error);
     } finally {

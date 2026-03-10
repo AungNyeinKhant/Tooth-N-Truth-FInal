@@ -15,6 +15,7 @@ import { WalkinsModule } from './modules/walkins/walkins.module';
 import { MedicalRecordsModule } from './modules/medical-records/medical-records.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { UploadModule } from './modules/upload/upload.module';
     MedicalRecordsModule,
     AnalyticsModule,
     UploadModule,
+    CalendarModule,
   ],
 })
 export class AppModule {}

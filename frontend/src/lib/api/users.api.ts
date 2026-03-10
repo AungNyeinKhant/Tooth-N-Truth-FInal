@@ -11,6 +11,8 @@ export interface User {
   lastName: string;
   phone: string | null;
   isActive: boolean;
+  googleId?: string | null;
+  googleEmail?: string | null;
   createdAt: string;
   updatedAt: string;
   branch?: {
