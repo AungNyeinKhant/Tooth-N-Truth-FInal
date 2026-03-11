@@ -332,7 +332,7 @@ export function BookingWizard() {
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
       
-      await appointmentsApi.create({
+      const response = await appointmentsApi.create({
         branchId: selectedBranch.id,
         doctorId: selectedDoctor.id,
         serviceId: selectedService.id,
@@ -341,7 +341,28 @@ export function BookingWizard() {
         notes,
       });
 
+      // Get calendar status from response
+      const calendarEventCreated = response.data?.calendarEventCreated;
+      const calendarError = response.data?.calendarError;
+
+      // Main success toast
       addToast("Appointment booked successfully!", "success");
+
+      // Handle calendar event creation status
+      if (calendarEventCreated === true) {
+        // Calendar event created successfully with reminder
+        addToast("Google Calendar event created with 1-hour reminder!", "success");
+      } else if (calendarEventCreated === 'sync_disabled') {
+        // Calendar connected but sync is disabled
+        addToast("Connect Google Calendar in your profile to get appointment reminders!", "info");
+      } else if (calendarEventCreated === 'not_connected') {
+        // Calendar not connected
+        addToast("Link Google Calendar in your profile to get appointment reminders!", "info");
+      } else if (calendarEventCreated === false || calendarError) {
+        // Failed to create calendar event
+        addToast("Failed to create Google Calendar event. You can still view your appointment in the app.", "warning");
+      }
+
       reset();
       // Clear URL params
       router.replace("/book");

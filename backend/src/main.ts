@@ -8,6 +8,9 @@ import { NestExpressApplication } from "@nestjs/platform-express";
 
 import { AppModule } from "./app.module";
 
+// Set timezone to Myanmar (UTC+6:30) for all date operations
+process.env.TZ = "Asia/Yangon";
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 

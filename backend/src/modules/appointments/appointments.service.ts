@@ -1028,6 +1028,10 @@ Please arrive 10 minutes before your scheduled appointment time.`,
     });
 
     // Create Google Calendar event if patient has calendar connected and sync enabled
+    // calendarEventCreated can be: true (success), false (failed), 'not_connected', 'sync_disabled'
+    let calendarEventCreated: boolean | string = false;
+    let calendarError: string | null = null;
+    
     try {
       console.log('[Calendar] Checking calendar status for user:', userId);
       const calendarStatus = await this.calendarService.getCalendarStatus(userId);
@@ -1035,8 +1039,10 @@ Please arrive 10 minutes before your scheduled appointment time.`,
       
       if (!calendarStatus.isConnected) {
         console.log('[Calendar] Calendar not connected, skipping event creation');
+        calendarEventCreated = 'not_connected';
       } else if (!calendarStatus.syncEnabled) {
         console.log('[Calendar] Calendar sync is disabled, skipping event creation. User needs to enable sync in profile.');
+        calendarEventCreated = 'sync_disabled';
       }
       
       if (calendarStatus.isConnected && calendarStatus.syncEnabled) {
@@ -1045,18 +1051,10 @@ Please arrive 10 minutes before your scheduled appointment time.`,
         const [startHours, startMinutes] = startTime.split(':').map(Number);
         const [endHours, endMinutes] = endTime.split(':').map(Number);
         
-        // Myanmar timezone is UTC+6:30, but server is in Thai timezone (UTC+7)
-        // We need to create the date in UTC so Google Calendar interprets it correctly
-        // Calculate offset: Thai (UTC+7) - Myanmar (UTC+6:30) = 30 minutes
-        const offsetMinutes = 30; // Server is 30 min ahead of Myanmar
-        
-        // Create date in local server time first
-        const localStart = new Date(year, month - 1, day, startHours, startMinutes, 0);
-        const localEnd = new Date(year, month - 1, day, endHours, endMinutes, 0);
-        
-        // Adjust for timezone difference (subtract 30 minutes to convert Thai to Myanmar time)
-        const eventStartTime = new Date(localStart.getTime() - offsetMinutes * 60 * 1000);
-        const eventEndTime = new Date(localEnd.getTime() - offsetMinutes * 60 * 1000);
+        // Server is now running in Myanmar timezone (UTC+6:30)
+        // Just create the date using local time - no conversion needed
+        const eventStartTime = new Date(year, month - 1, day, startHours, startMinutes, 0);
+        const eventEndTime = new Date(year, month - 1, day, endHours, endMinutes, 0);
 
         console.log('[Calendar] Creating event with times:', {
           startTime: eventStartTime.toISOString(),
@@ -1100,13 +1098,20 @@ Please arrive 10 minutes before your scheduled appointment time.`,
             endTime: eventEndTime,
           },
         );
+        calendarEventCreated = true;
       }
     } catch (error) {
       // Log error but don't fail the appointment creation
       console.error('Failed to create calendar event:', error);
+      calendarError = error instanceof Error ? error.message : 'Unknown error';
     }
 
-    return appointment;
+    // Return appointment with calendar status
+    return {
+      ...appointment,
+      calendarEventCreated,
+      calendarError,
+    };
   }
 
   async update(
