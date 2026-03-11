@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores";
 import {
@@ -19,12 +20,10 @@ import {
   Filter,
   RefreshCw,
   Loader2,
-  MoreVertical,
   CheckCircle,
   XCircle,
-  Clock,
+  AlertTriangle,
   CalendarClock,
-  Edit,
   FileText,
   User,
 } from "lucide-react";
@@ -46,16 +45,17 @@ export default function AppointmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [limit] = useState(20);
+  const [limit] = useState(10);
 
   // Filter state
   const statusFilterRef = useRef<AppointmentStatus | "">("");
-  const searchRef = useRef<HTMLInputElement>(null);
   const dateFilterRef = useRef<string>("");
   const doctorFilterRef = useRef<string>("");
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "">("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // live input value
+  const [searchQuery, setSearchQuery] = useState("");  // committed query sent to API
+  const [dateFilter, setDateFilter] = useState(() => searchParams.get("date") || "");
   const [doctorFilter, setDoctorFilter] = useState("");
 
   // Modal state
@@ -119,8 +119,13 @@ export default function AppointmentsPage() {
 
   // Handlers
   const handleSearch = () => {
-    const searchValue = searchRef.current?.value || "";
-    setSearchQuery(searchValue);
+    setSearchQuery(searchInput);
+    setPage(1);
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput("");
+    setSearchQuery("");
     setPage(1);
   };
 
@@ -230,15 +235,25 @@ export default function AppointmentsPage() {
         <div className="flex-1 max-w-md">
           <div className="relative">
             <input
-              ref={searchRef}
               type="text"
-              placeholder="Search by patient name..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by patient name or phone..."
+              className="w-full pl-10 pr-20 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00BCD4]"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSearch();
               }}
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            {searchInput && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute right-16 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                title="Clear"
+              >
+                ✕
+              </button>
+            )}
             <button
               onClick={handleSearch}
               className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
@@ -344,6 +359,9 @@ export default function AppointmentsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Type
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Revenue
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -407,6 +425,28 @@ export default function AppointmentsPage() {
                       )}
                     </td>
 
+                    {/* Revenue */}
+                    <td className="px-4 py-3">
+                      <p className={`text-sm font-semibold ${
+                        appointment.status === 'COMPLETED'
+                          ? 'text-green-600'
+                          : appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW'
+                          ? 'text-gray-400 line-through'
+                          : 'text-gray-700'
+                      }`}>
+                        {Number(appointment.service.price).toLocaleString('en-US')} MMK
+                      </p>
+                      {appointment.status === 'COMPLETED' && (
+                        <p className="text-xs text-green-500">Earned</p>
+                      )}
+                      {(appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') && (
+                        <p className="text-xs text-gray-400">Lost</p>
+                      )}
+                      {appointment.status === 'CONFIRMED' && (
+                        <p className="text-xs text-blue-400">Expected</p>
+                      )}
+                    </td>
+
                     {/* Actions */}
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -414,30 +454,30 @@ export default function AppointmentsPage() {
                           <>
                             <button
                               onClick={() => openRescheduleModal(appointment)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                               title="Reschedule"
                             >
                               <CalendarClock className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => openStatusModal(appointment, "COMPLETED")}
-                              className="p-1.5 text-green-600 hover:bg-green-50 rounded"
+                              className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
                               title="Mark Completed"
                             >
                               <CheckCircle className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => openStatusModal(appointment, "NO_SHOW")}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-colors"
                               title="No Show"
                             >
-                              <XCircle className="w-4 h-4" />
+                              <AlertTriangle className="w-4 h-4" />
                             </button>
                           </>
                         )}
                         <button
                           onClick={() => openNotesModal(appointment)}
-                          className="p-1.5 text-gray-600 hover:bg-gray-50 rounded"
+                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors"
                           title="Add Notes"
                         >
                           <FileText className="w-4 h-4" />
@@ -445,7 +485,7 @@ export default function AppointmentsPage() {
                         {appointment.status === "CONFIRMED" && (
                           <button
                             onClick={() => openStatusModal(appointment, "CANCELLED")}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
                             title="Cancel"
                           >
                             <XCircle className="w-4 h-4" />

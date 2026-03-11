@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   Calendar,
@@ -8,86 +9,33 @@ import {
   DollarSign,
   CheckCircle,
   UserPlus,
-  ClipboardList,
   CalendarClock,
+  ClipboardList,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import { analyticsApi, DailyStats } from "@/lib/api/analytics.api";
+import { appointmentsApi, ManagerAppointment } from "@/lib/api/appointments.api";
 
-// Static mock data for dashboard display
-const mockStats = {
-  todayAppointments: 12,
-  pendingWalkIns: 3,
-  activeDoctors: 4,
-  todayRevenue: 850000,
-  completedToday: 8,
-};
-
-const mockAppointments = [
-  {
-    id: "1",
-    patientName: "John Doe",
-    patientPhone: "+95 912 345 678",
-    doctorName: "Dr. Sarah Johnson",
-    serviceName: "Dental Cleaning",
-    startTime: "09:00",
-    endTime: "09:30",
-    status: "COMPLETED",
-    isWalkIn: false,
-    tokenNumber: null,
-  },
-  {
-    id: "2",
-    patientName: "Jane Smith",
-    patientPhone: "+95 923 456 789",
-    doctorName: "Dr. Michael Chen",
-    serviceName: "Root Canal",
-    startTime: "09:30",
-    endTime: "10:30",
-    status: "CONFIRMED",
-    isWalkIn: false,
-    tokenNumber: null,
-  },
-  {
-    id: "3",
-    patientName: "Walk-in Patient",
-    patientPhone: "+95 934 567 890",
-    doctorName: "Dr. Sarah Johnson",
-    serviceName: "Consultation",
-    startTime: "10:00",
-    endTime: "10:30",
-    status: "CONFIRMED",
-    isWalkIn: true,
-    tokenNumber: "W-001",
-  },
-  {
-    id: "4",
-    patientName: "Robert Brown",
-    patientPhone: "+95 945 678 901",
-    doctorName: "Dr. Emily Davis",
-    serviceName: "Teeth Whitening",
-    startTime: "11:00",
-    endTime: "12:00",
-    status: "CONFIRMED",
-    isWalkIn: false,
-    tokenNumber: null,
-  },
-  {
-    id: "5",
-    patientName: "Emily Wilson",
-    patientPhone: "+95 956 789 012",
-    doctorName: "Dr. Michael Chen",
-    serviceName: "Extraction",
-    startTime: "14:00",
-    endTime: "14:30",
-    status: "CONFIRMED",
-    isWalkIn: false,
-    tokenNumber: null,
-  },
-];
+// Helper: get today as YYYY-MM-DD in local timezone
+function getTodayLocal(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function ManagerDashboardPage() {
   const { user } = useAuthStore();
+
+  const [stats, setStats] = useState<DailyStats | null>(null);
+  const [appointments, setAppointments] = useState<ManagerAppointment[]>([]);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
+
+  const today = getTodayLocal();
 
   const currentDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -96,7 +44,50 @@ export default function ManagerDashboardPage() {
     day: "numeric",
   });
 
-  const branchName = (user as any)?.branchManager?.branch?.name || "Your Branch";
+  const branchName =
+    (user as any)?.branchManager?.branch?.name || "Your Branch";
+
+  useEffect(() => {
+    const loadStats = async () => {
+      setIsLoadingStats(true);
+      try {
+        const res = await analyticsApi.getDailyStats();
+        setStats(res.data.data);
+      } catch (err) {
+        console.error("Failed to load dashboard stats:", err);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    const loadSchedule = async () => {
+      setIsLoadingSchedule(true);
+      try {
+        const res = await appointmentsApi.getManager({
+          date: today,
+          limit: 10,
+          page: 1,
+        });
+        // Handle nested formatList response: { data: { data: [...], total: ... } }
+        const payload: any = res.data;
+        const items: ManagerAppointment[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.data?.data)
+          ? payload.data.data
+          : [];
+        setAppointments(items);
+      } catch (err) {
+        console.error("Failed to load today's schedule:", err);
+      } finally {
+        setIsLoadingSchedule(false);
+      }
+    };
+
+    loadStats();
+    loadSchedule();
+  }, [today]);
 
   return (
     <div className="space-y-6">
@@ -119,46 +110,51 @@ export default function ManagerDashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Today's Appointments"
-          value={mockStats.todayAppointments}
+          value={stats?.totalAppointments}
           description="Scheduled for today"
           icon={Calendar}
           color="cyan"
+          isLoading={isLoadingStats}
         />
         <StatCard
           title="Walk-ins Waiting"
-          value={mockStats.pendingWalkIns}
+          value={stats?.walkIns}
           description="Pending walk-in patients"
           icon={Users}
           color="orange"
+          isLoading={isLoadingStats}
         />
         <StatCard
           title="Active Doctors"
-          value={mockStats.activeDoctors}
+          value={stats?.activeDoctors}
           description="In your branch"
           icon={Stethoscope}
           color="green"
+          isLoading={isLoadingStats}
         />
         <StatCard
           title="Today's Revenue"
-          value={mockStats.todayRevenue}
+          value={stats?.totalRevenue}
           description="From completed appointments"
           icon={DollarSign}
           color="blue"
           isCurrency
+          isLoading={isLoadingStats}
         />
         <StatCard
           title="Completed Today"
-          value={mockStats.completedToday}
+          value={stats?.completed}
           description="Appointments completed"
           icon={CheckCircle}
           color="purple"
+          isLoading={isLoadingStats}
         />
       </div>
 
       {/* Quick Actions */}
       <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <QuickActionCard
             title="Add Walk-in"
             description="Register a walk-in patient"
@@ -170,12 +166,6 @@ export default function ManagerDashboardPage() {
             description="See today's schedule"
             href="/branch-manager/appointments"
             icon={CalendarClock}
-          />
-          <QuickActionCard
-            title="Manage Doctors"
-            description="View and manage doctors"
-            href="/branch-manager/doctors"
-            icon={Stethoscope}
           />
           <QuickActionCard
             title="View Analytics"
@@ -191,18 +181,29 @@ export default function ManagerDashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Today's Schedule</h2>
           <Link
-            href="/branch-manager/appointments"
+            href={`/branch-manager/appointments?date=${today}`}
             className="text-sm text-[#00BCD4] hover:text-[#00A5BA] flex items-center gap-1"
           >
             View All <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
 
-        <div className="space-y-3">
-          {mockAppointments.map((appointment) => (
-            <AppointmentRow key={appointment.id} appointment={appointment} />
-          ))}
-        </div>
+        {isLoadingSchedule ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-[#00BCD4]" />
+          </div>
+        ) : appointments.length === 0 ? (
+          <div className="text-center py-10 text-gray-400">
+            <Calendar className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+            <p className="text-sm">No appointments scheduled for today</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {appointments.map((appointment) => (
+              <AppointmentRow key={appointment.id} appointment={appointment} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -211,11 +212,12 @@ export default function ManagerDashboardPage() {
 // Stat Card Component
 interface StatCardProps {
   title: string;
-  value: number;
+  value: number | undefined;
   description: string;
   icon: React.ElementType;
   color: "cyan" | "orange" | "green" | "blue" | "purple";
   isCurrency?: boolean;
+  isLoading?: boolean;
 }
 
 function StatCard({
@@ -225,6 +227,7 @@ function StatCard({
   icon: Icon,
   color,
   isCurrency = false,
+  isLoading = false,
 }: StatCardProps) {
   const colorClasses = {
     cyan: "bg-[#00BCD4]/10 text-[#00BCD4]",
@@ -251,9 +254,13 @@ function StatCard({
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">
-            {formatValue(value)}
-          </p>
+          {isLoading ? (
+            <div className="mt-1 h-8 w-16 animate-pulse bg-gray-200 rounded" />
+          ) : (
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {formatValue(value ?? 0)}
+            </p>
+          )}
           <p className="text-xs text-gray-400 mt-1">{description}</p>
         </div>
         <div className={`rounded-lg p-2.5 ${colorClasses[color]}`}>
@@ -297,20 +304,7 @@ function QuickActionCard({
 }
 
 // Appointment Row Component
-interface Appointment {
-  id: string;
-  patientName: string;
-  patientPhone: string;
-  doctorName: string;
-  serviceName: string;
-  startTime: string;
-  endTime: string;
-  status: string;
-  isWalkIn: boolean;
-  tokenNumber: string | null;
-}
-
-function AppointmentRow({ appointment }: { appointment: Appointment }) {
+function AppointmentRow({ appointment }: { appointment: ManagerAppointment }) {
   const statusColors: Record<string, string> = {
     CONFIRMED: "bg-blue-100 text-blue-700",
     COMPLETED: "bg-green-100 text-green-700",
@@ -318,34 +312,44 @@ function AppointmentRow({ appointment }: { appointment: Appointment }) {
     NO_SHOW: "bg-gray-100 text-gray-700",
   };
 
+  const patientName = appointment.patient
+    ? `${appointment.patient.user.firstName} ${appointment.patient.user.lastName}`
+    : "Unknown Patient";
+
   return (
     <div className="flex items-center gap-4 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-[#00BCD4]/10 text-[#00BCD4] font-semibold text-sm">
+      <div className="flex items-center justify-center h-10 w-16 rounded-lg bg-[#00BCD4]/10 text-[#00BCD4] font-semibold text-xs shrink-0">
         {appointment.startTime}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium text-gray-900 truncate">
-            {appointment.patientName}
+            {patientName}
           </p>
           {appointment.isWalkIn && (
-            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-[#FF6B35]/10 text-[#FF6B35]">
+            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-[#FF6B35]/10 text-[#FF6B35] shrink-0">
               Walk-in
               {appointment.tokenNumber && ` #${appointment.tokenNumber}`}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>{appointment.doctorName}</span>
+          <span>Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}</span>
           <span>•</span>
-          <span>{appointment.serviceName}</span>
+          <span>{appointment.service.name}</span>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[appointment.status] || "bg-gray-100 text-gray-700"}`}>
+      <div className="flex items-center gap-2 shrink-0">
+        <span
+          className={`px-2 py-1 text-xs font-medium rounded-full ${
+            statusColors[appointment.status] || "bg-gray-100 text-gray-700"
+          }`}
+        >
           {appointment.status.replace("_", " ")}
         </span>
-        <span className="text-xs text-gray-400">{appointment.startTime} - {appointment.endTime}</span>
+        <span className="text-xs text-gray-400 hidden sm:block">
+          {appointment.startTime} - {appointment.endTime}
+        </span>
       </div>
     </div>
   );

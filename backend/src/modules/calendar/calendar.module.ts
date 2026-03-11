@@ -1,0 +1,13 @@
+import { Module, forwardRef } from '@nestjs/common';
+import { CalendarController } from './calendar.controller';
+import { CalendarService } from './calendar.service';
+import { PrismaModule } from '../../database/prisma/prisma.module';
+import { AppointmentsModule } from '../appointments/appointments.module';
+
+@Module({
+  imports: [PrismaModule],
+  controllers: [CalendarController],
+  providers: [CalendarService],
+  exports: [CalendarService],
+})
+export class CalendarModule {}

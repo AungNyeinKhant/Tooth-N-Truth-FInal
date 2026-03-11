@@ -3,10 +3,13 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { UserRole } from '../../shared/enums';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
+import { CalendarService } from '../calendar/calendar.service';
 
 export interface AdminAppointmentsQuery {
   status?: string;
@@ -15,13 +18,18 @@ export interface AdminAppointmentsQuery {
   startDate?: string;
   endDate?: string;
   search?: string;
+  orderBy?: string;
   page: number;
   limit: number;
 }
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => CalendarService))
+    private calendarService: CalendarService,
+  ) {}
 
   async getAdminAppointments(query: AdminAppointmentsQuery): Promise<{ items: any[]; total: number }> {
     const {
@@ -67,22 +75,36 @@ export class AppointmentsService {
       }
     }
 
-    // Search by patient name or email
+    // Search by patient name, email, phone, doctor name, or service name
     if (search) {
-      where.OR = [
+      where.AND = [
         {
-          patient: {
-            user: {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-              ],
+          OR: [
+            {
+              patient: {
+                user: {
+                  OR: [
+                    { firstName: { contains: search, mode: 'insensitive' } },
+                    { lastName: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                    { phone: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
             },
-          },
+            { doctor: { firstName: { contains: search, mode: 'insensitive' } } },
+            { doctor: { lastName: { contains: search, mode: 'insensitive' } } },
+            { service: { name: { contains: search, mode: 'insensitive' } } },
+          ],
         },
       ];
     }
+
+    // Order by
+    let orderByClause: any = [{ appointmentDate: 'desc' }, { startTime: 'asc' }];
+    if (query.orderBy === 'appointmentDate_asc') orderByClause = [{ appointmentDate: 'asc' }, { startTime: 'asc' }];
+    else if (query.orderBy === 'createdAt_desc') orderByClause = [{ createdAt: 'desc' }];
+    else if (query.orderBy === 'appointmentDate_desc') orderByClause = [{ appointmentDate: 'desc' }, { startTime: 'asc' }];
 
     const [items, total] = await Promise.all([
       this.prisma.appointment.findMany({
@@ -123,10 +145,7 @@ export class AppointmentsService {
             },
           },
         },
-        orderBy: [
-          { appointmentDate: 'desc' },
-          { startTime: 'asc' },
-        ],
+        orderBy: orderByClause,
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -203,21 +222,29 @@ export class AppointmentsService {
       }
     }
 
-    // Search by patient name
+    // Search by patient name/phone/email, doctor name, service name, or token
     if (search) {
-      where.OR = [
+      where.AND = [
         {
-          patient: {
-            user: {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-              ],
+          OR: [
+            {
+              patient: {
+                user: {
+                  OR: [
+                    { firstName: { contains: search, mode: 'insensitive' } },
+                    { lastName: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                    { phone: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
             },
-          },
+            { doctor: { firstName: { contains: search, mode: 'insensitive' } } },
+            { doctor: { lastName: { contains: search, mode: 'insensitive' } } },
+            { service: { name: { contains: search, mode: 'insensitive' } } },
+            { tokenNumber: { contains: search, mode: 'insensitive' } },
+          ],
         },
-        { tokenNumber: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -301,19 +328,27 @@ export class AppointmentsService {
       throw new BadRequestException('Doctor does not belong to this branch');
     }
 
-    // Calculate end time based on service duration
-    const service = await this.prisma.service.findUnique({
-      where: { id: appointment.serviceId },
+    // Parse date to get day of week
+    const [reschYear, reschMonth, reschDay] = appointmentDate.split('-').map(Number);
+    const reschDateObj = new Date(reschYear, reschMonth - 1, reschDay);
+    const reschDayOfWeek = reschDateObj.getDay();
+
+    // Look up the doctor's slot to get end time
+    const doctorSlotResch = await this.prisma.doctorSlot.findFirst({
+      where: {
+        doctorId,
+        dayOfWeek: reschDayOfWeek,
+        startTime,
+        isActive: true,
+      },
     });
 
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    let endHour = startHour;
-    let endMin = startMin + (service?.duration || 30);
-    while (endMin >= 60) {
-      endHour++;
-      endMin -= 60;
+    if (!doctorSlotResch) {
+      throw new BadRequestException('Selected time slot is not available');
     }
-    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+
+    // Use slot's end time instead of calculating based on service duration
+    const endTime = doctorSlotResch.endTime;
 
     // Parse date string in local time (matching doctors service)
     const [year, month, day] = appointmentDate.split('-').map(Number);
@@ -354,6 +389,7 @@ export class AppointmentsService {
           include: {
             user: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
                 email: true,
@@ -377,8 +413,74 @@ export class AppointmentsService {
             duration: true,
           },
         },
+        branch: {
+          select: {
+            name: true,
+            address: true,
+          },
+        },
       },
     });
+
+    // Update Google Calendar event if exists
+    try {
+      const patientUserId = updated.patient.user.id;
+      const calendarStatus = await this.calendarService.getCalendarStatus(patientUserId);
+      
+      if (calendarStatus.isConnected && calendarStatus.syncEnabled && updated.googleCalendarEventId) {
+        // Calculate new start and end Date objects
+        const [startHours, startMinutes] = startTime.split(':').map(Number);
+        const [endHours, endMinutes] = endTime.split(':').map(Number);
+        
+        // Create dates using local time
+        const eventStartTime = new Date(dateObj);
+        eventStartTime.setHours(startHours, startMinutes, 0, 0);
+        
+        const eventEndTime = new Date(dateObj);
+        eventEndTime.setHours(endHours, endMinutes, 0, 0);
+
+        // Format the appointment time for display
+        const formatTime = (timeStr: string) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          const period = h >= 12 ? 'PM' : 'AM';
+          const displayH = h % 12 || 12;
+          return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+        };
+
+        const formattedDate = new Date(dateObj).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+
+        await this.calendarService.updateCalendarEvent(
+          patientUserId,
+          id,
+          {
+            summary: 'Tooth & Truth appointment',
+            description: `Clinic: Tooth & Truth Dental Clinic
+Branch: ${updated.branch.name}
+Address: ${updated.branch.address || 'N/A'}
+
+Service: ${updated.service.name}
+Doctor: Dr. ${updated.doctor.firstName} ${updated.doctor.lastName}
+Date: ${formattedDate}
+Time: ${formatTime(startTime)} - ${formatTime(endTime)}
+
+Notes: ${updated.notes || 'None'}
+
+Please arrive 10 minutes before your scheduled appointment time.`,
+            location: updated.branch.name,
+            startTime: eventStartTime,
+            endTime: eventEndTime,
+          },
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the reschedule
+      console.error('Failed to update calendar event:', error);
+    }
 
     return updated;
   }
@@ -479,24 +581,27 @@ export class AppointmentsService {
       throw new BadRequestException('Doctor does not belong to this branch');
     }
 
-    // Verify service exists
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
+    // Parse date to get day of week
+    const [mgrYear, mgrMonth, mgrDay] = appointmentDate.split('-').map(Number);
+    const mgrDateObj = new Date(mgrYear, mgrMonth - 1, mgrDay);
+    const mgrDayOfWeek = mgrDateObj.getDay();
+
+    // Look up the doctor's slot to get end time
+    const doctorSlotMgr = await this.prisma.doctorSlot.findFirst({
+      where: {
+        doctorId,
+        dayOfWeek: mgrDayOfWeek,
+        startTime,
+        isActive: true,
+      },
     });
 
-    if (!service) {
-      throw new NotFoundException('Service not found');
+    if (!doctorSlotMgr) {
+      throw new BadRequestException('Selected time slot is not available');
     }
 
-    // Calculate end time
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    let endHour = startHour;
-    let endMin = startMin + service.duration;
-    while (endMin >= 60) {
-      endHour++;
-      endMin -= 60;
-    }
-    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+    // Use slot's end time instead of calculating based on service duration
+    const endTime = doctorSlotMgr.endTime;
 
     // Parse date string in local time (matching doctors service)
     const [year, month, day] = appointmentDate.split('-').map(Number);
@@ -729,7 +834,16 @@ export class AppointmentsService {
       orderBy: { appointmentDate: 'desc' },
     });
 
-    return appointments;
+    // Return appointments with appointmentDate as full ISO string
+    // (do NOT strip to YYYY-MM-DD because that gives the UTC date, not local date)
+    const transformed = appointments.map(apt => ({
+      ...apt,
+      appointmentDate: apt.appointmentDate instanceof Date
+        ? apt.appointmentDate.toISOString()
+        : String(apt.appointmentDate),
+    }));
+
+    return transformed;
   }
 
   async findOne(id: string, userId: string, role: UserRole) {
@@ -813,14 +927,23 @@ export class AppointmentsService {
       throw new NotFoundException('Patient profile not found');
     }
 
-    // Get service duration to calculate end time
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
-      select: { duration: true },
+    // Parse date to get day of week
+    const [year, month, day] = appointmentDate.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
+    const dayOfWeek = dateObj.getDay();
+
+    // Look up the doctor's slot to get end time
+    const doctorSlot = await this.prisma.doctorSlot.findFirst({
+      where: {
+        doctorId,
+        dayOfWeek,
+        startTime,
+        isActive: true,
+      },
     });
 
-    if (!service) {
-      throw new NotFoundException('Service not found');
+    if (!doctorSlot) {
+      throw new BadRequestException('Selected time slot is not available');
     }
 
     // Validate and parse start time
@@ -828,18 +951,11 @@ export class AppointmentsService {
     if (!timeRegex.test(startTime)) {
       throw new BadRequestException('Invalid time format. Use HH:mm format (e.g., 09:00)');
     }
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    let endHour = startHour;
-    let endMin = startMin + service.duration;
-    while (endMin >= 60) {
-      endHour++;
-      endMin -= 60;
-    }
-    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 
-    // Parse date string in local time (matching doctors service)
-    const [year, month, day] = appointmentDate.split('-').map(Number);
-    const dateObj = new Date(year, month - 1, day);
+    // Use slot's end time instead of calculating based on service duration
+    const endTime = doctorSlot.endTime;
+
+    // Use already parsed date for conflict check
     const startOfDay = new Date(dateObj);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(dateObj);
@@ -880,6 +996,17 @@ export class AppointmentsService {
         status: 'CONFIRMED',
       },
       include: {
+        patient: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
         doctor: {
           select: {
             firstName: true,
@@ -889,6 +1016,7 @@ export class AppointmentsService {
         branch: {
           select: {
             name: true,
+            address: true,
           },
         },
         service: {
@@ -898,6 +1026,85 @@ export class AppointmentsService {
         },
       },
     });
+
+    // Create Google Calendar event if patient has calendar connected and sync enabled
+    try {
+      console.log('[Calendar] Checking calendar status for user:', userId);
+      const calendarStatus = await this.calendarService.getCalendarStatus(userId);
+      console.log('[Calendar] Calendar status:', JSON.stringify(calendarStatus));
+      
+      if (!calendarStatus.isConnected) {
+        console.log('[Calendar] Calendar not connected, skipping event creation');
+      } else if (!calendarStatus.syncEnabled) {
+        console.log('[Calendar] Calendar sync is disabled, skipping event creation. User needs to enable sync in profile.');
+      }
+      
+      if (calendarStatus.isConnected && calendarStatus.syncEnabled) {
+        // Parse the appointment date components
+        const [year, month, day] = appointmentDate.split('-').map(Number);
+        const [startHours, startMinutes] = startTime.split(':').map(Number);
+        const [endHours, endMinutes] = endTime.split(':').map(Number);
+        
+        // Myanmar timezone is UTC+6:30, but server is in Thai timezone (UTC+7)
+        // We need to create the date in UTC so Google Calendar interprets it correctly
+        // Calculate offset: Thai (UTC+7) - Myanmar (UTC+6:30) = 30 minutes
+        const offsetMinutes = 30; // Server is 30 min ahead of Myanmar
+        
+        // Create date in local server time first
+        const localStart = new Date(year, month - 1, day, startHours, startMinutes, 0);
+        const localEnd = new Date(year, month - 1, day, endHours, endMinutes, 0);
+        
+        // Adjust for timezone difference (subtract 30 minutes to convert Thai to Myanmar time)
+        const eventStartTime = new Date(localStart.getTime() - offsetMinutes * 60 * 1000);
+        const eventEndTime = new Date(localEnd.getTime() - offsetMinutes * 60 * 1000);
+
+        console.log('[Calendar] Creating event with times:', {
+          startTime: eventStartTime.toISOString(),
+          endTime: eventEndTime.toISOString(),
+        });
+
+        // Format the appointment time for display
+        const formatTime = (timeStr: string) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          const period = h >= 12 ? 'PM' : 'AM';
+          const displayH = h % 12 || 12;
+          return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+        };
+
+        const formattedDate = new Date(year, month - 1, day).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+
+        await this.calendarService.createCalendarEvent(
+          userId,
+          appointment.id,
+          {
+            summary: 'Tooth & Truth appointment',
+            description: `Clinic: Tooth & Truth Dental Clinic
+Branch: ${appointment.branch.name}
+Address: ${appointment.branch.address || 'N/A'}
+
+Service: ${appointment.service.name}
+Doctor: Dr. ${appointment.doctor.firstName} ${appointment.doctor.lastName}
+Date: ${formattedDate}
+Time: ${formatTime(startTime)} - ${formatTime(endTime)}
+
+Notes: ${notes || 'None'}
+
+Please arrive 10 minutes before your scheduled appointment time.`,
+            location: appointment.branch.name,
+            startTime: eventStartTime,
+            endTime: eventEndTime,
+          },
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the appointment creation
+      console.error('Failed to create calendar event:', error);
+    }
 
     return appointment;
   }
@@ -989,6 +1196,18 @@ export class AppointmentsService {
       throw new BadRequestException('Cannot cancel completed appointment');
     }
 
+    // Check if appointment is at least 1 hour away (for patients)
+    const appointmentDateTime = new Date(appointment.appointmentDate);
+    const [hours, minutes] = appointment.startTime.split(':').map(Number);
+    appointmentDateTime.setHours(hours, minutes, 0, 0);
+    
+    const now = new Date();
+    const hoursUntilAppointment = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursUntilAppointment < 1) {
+      throw new BadRequestException('Cannot cancel appointment less than 1 hour before the scheduled time');
+    }
+
     const updated = await this.prisma.appointment.update({
       where: { id },
       data: {
@@ -996,6 +1215,17 @@ export class AppointmentsService {
         cancelReason: reason,
       },
     });
+
+    // Delete Google Calendar event if exists
+    try {
+      const calendarStatus = await this.calendarService.getCalendarStatus(userId);
+      if (calendarStatus.isConnected && appointment.googleCalendarEventId) {
+        await this.calendarService.deleteCalendarEvent(userId, id);
+      }
+    } catch (error) {
+      // Log error but don't fail the cancellation
+      console.error('Failed to delete calendar event:', error);
+    }
 
     return updated;
   }

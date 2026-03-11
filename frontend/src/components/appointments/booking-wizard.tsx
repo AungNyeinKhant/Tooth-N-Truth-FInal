@@ -219,7 +219,7 @@ export function BookingWizard() {
 
       addToast("Appointment booked successfully!", "success");
       reset();
-      router.push("/appointments");
+      router.push("/medical-history");
     } catch (error: any) {
       addToast(
         error.response?.data?.message || "Failed to book appointment",

@@ -65,4 +65,12 @@ export class CreateDoctorDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'https://res.cloudinary.com/.../image.jpg',
+    description: 'Doctor profile image URL',
+  })
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
 }

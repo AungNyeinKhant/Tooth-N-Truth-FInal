@@ -21,6 +21,7 @@ const userSchema = z.object({
     .string()
     .min(2, "Last name must be at least 2 characters")
     .max(50, "Last name must be less than 50 characters"),
+  email: z.string().email("Please enter a valid email address"),
   phone: z.string().optional(),
   isActive: z.boolean().default(true),
 });
@@ -56,6 +57,7 @@ export default function EditUserPage() {
     defaultValues: {
       firstName: "",
       lastName: "",
+      email: "",
       phone: "",
       isActive: true,
     },
@@ -84,6 +86,7 @@ export default function EditUserPage() {
         reset({
           firstName: fetchedUser.firstName,
           lastName: fetchedUser.lastName,
+          email: fetchedUser.email,
           phone: fetchedUser.phone || "",
           isActive: fetchedUser.isActive,
         });
@@ -107,6 +110,7 @@ export default function EditUserPage() {
       const updateData: UpdateUserData = {
         firstName: data.firstName,
         lastName: data.lastName,
+        email: data.email !== user?.email ? data.email : undefined,
         phone: data.phone || undefined,
         isActive: data.isActive,
       };
@@ -246,18 +250,20 @@ export default function EditUserPage() {
               </div>
             </div>
 
-            {/* Email (Read-only) */}
+            {/* Email (Editable by admin) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="text"
-                value={user.email}
-                disabled
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+              <Input
+                id="email"
+                type="email"
+                label="Email *"
+                placeholder="e.g., user@example.com"
+                {...register("email")}
+                error={errors.email?.message}
+                className="w-full"
               />
-              <p className="mt-1 text-xs text-gray-500">Email cannot be changed</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Changing this updates the user&apos;s login email
+              </p>
             </div>
 
             {/* Phone */}

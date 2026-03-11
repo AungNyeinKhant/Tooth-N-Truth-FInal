@@ -25,6 +25,7 @@ model User {
   email         String    @unique
   password      String?           // Optional for Google OAuth users
   googleId      String?   @unique // For Google OAuth login
+  googleEmail   String?           // The Google account email used for OAuth (may differ from login email)
   role          UserRole
   firstName     String
   lastName      String
@@ -34,8 +35,9 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  patient       Patient?
-  branchManager BranchManager?
+  patient         Patient?
+  branchManager   BranchManager?
+  refreshTokens   RefreshToken[]
 
   @@map("users")
 }
@@ -49,11 +51,13 @@ model Patient {
   medicalHistory  String?   @db.Text
   allergies       String?
   
-  // Google Calendar Integration
-  googleCalendarEmail     String?   // The Google account connected for calendar (can differ from login email)
-  googleRefreshToken      String?   // OAuth refresh token for background syncing
+  // Google Calendar Integration (using same googleEmail from User)
+  googleRefreshToken      String?   // OAuth refresh token (encrypted) for calendar
+  googleAccessToken       String?   // Cached short-lived access token (encrypted)
+  googleTokenExpiresAt    DateTime? // When the cached access token expires
   googleCalendarConnected Boolean   @default(false)
   calendarSyncEnabled     Boolean   @default(false)  // User can toggle auto-sync on/off
+  lastCalendarSyncAt      DateTime? // Timestamp of last successful calendar sync
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -229,4 +233,37 @@ model SystemSettings {
   updatedAt         DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+// ─── Phase 4: JWT Token Rotation ────────────────────────────────────────────
+// Stores hashed refresh tokens to support rotation, revocation, and
+// multi-device sessions. On logout or account unlink, tokens are deleted.
+model RefreshToken {
+  id          String   @id @default(uuid())
+  userId      String
+  tokenHash   String   @unique  // bcrypt hash of the raw token
+  deviceInfo  String?           // Optional: browser/device hint for UI display
+  expiresAt   DateTime          // Mirrors JWT expiry (7 days)
+  isRevoked   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── Phase 4: OAuth CSRF State Tokens ───────────────────────────────────────
+// Stores short-lived CSRF nonces for in-flight OAuth flows.
+// Created before redirecting to Google, validated on callback, then deleted.
+model OAuthState {
+  id        String   @id @default(uuid())
+  state     String   @unique  // Random nonce sent as ?state= param
+  userId    String?           // Set for account-linking flows (null for new login)
+  flow      String            // 'login' | 'link-google' | 'calendar'
+  expiresAt DateTime          // Short TTL — typically 10 minutes
+  createdAt DateTime @default(now())
+
+  @@index([state])
+  @@map("oauth_states")
 }

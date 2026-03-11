@@ -626,6 +626,23 @@ export function RegisterWalkInModal({
                 )}
               </button>
             </div>
+
+            {/* Selected Slot Summary */}
+            {formData.slotId && (
+              <div className="mt-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <p className="text-sm font-medium text-cyan-800">Selected Appointment:</p>
+                <p className="text-sm text-cyan-700">
+                  📅 {formData.date} at {doctorSlots.find(s => s.id === formData.slotId)?.startTime} - {doctorSlots.find(s => s.id === formData.slotId)?.endTime}
+                </p>
+              </div>
+            )}
+            {!formData.slotId && (
+              <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <p className="text-sm text-orange-700">
+                  ⚡ Immediate walk-in (no scheduled time)
+                </p>
+              </div>
+            )}
           </form>
         </div>
       </div>

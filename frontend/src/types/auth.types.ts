@@ -7,6 +7,8 @@ export interface User {
   role: 'PATIENT' | 'BRANCH_MANAGER' | 'ADMIN';
   isActive: boolean;
   profileImage?: string;
+  googleId?: string | null;
+  googleEmail?: string | null;
   createdAt: string;
   branchId?: string;
   branchManager?: {
@@ -49,4 +51,5 @@ export interface RegisterData {
   dateOfBirth?: string;
   address?: string;
   emergencyContact?: string;
+  profileImage?: string;
 }

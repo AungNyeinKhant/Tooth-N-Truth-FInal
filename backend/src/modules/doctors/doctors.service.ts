@@ -40,18 +40,20 @@ export class DoctorsService {
     const [items, total] = await Promise.all([
       this.prisma.doctor.findMany({
         where,
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          specialization: true,
-          phone: true,
-          email: true,
-          bio: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          branch: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        bio: true,
+        isActive: true,
+        profileImage: true,
+        createdAt: true,
+        updatedAt: true,
+        branchId: true,
+        branch: {
             select: {
               id: true,
               name: true,
@@ -131,11 +133,8 @@ export class DoctorsService {
 
   async getAvailableSlots(doctorId: string, dateString: string, serviceId: string) {
     // Parse date string directly (YYYY-MM-DD format from frontend)
-    // Use local time to match how dates are stored/queried consistently
     const [year, month, day] = dateString.split('-').map(Number);
-    const date = new Date(year, month - 1, day); // Local time
-    
-    console.log('[DoctorsService] Query:', { dateString, parsedDate: date.toDateString(), dayOfWeek: date.getDay() });
+    const date = new Date(year, month - 1, day);
     
     if (isNaN(date.getTime())) {
       throw new BadRequestException('Invalid date format');
@@ -151,21 +150,11 @@ export class DoctorsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get service duration
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
-      select: { duration: true },
-    });
-
-    if (!service) {
-      throw new NotFoundException('Service not found');
-    }
-
     // Get day of week (0 = Sunday, 1 = Monday, etc.)
     const dayOfWeek = date.getDay();
 
     // Get all slots for this doctor on this day
-    const slots = await this.prisma.doctorSlot.findMany({
+    const doctorSlots = await this.prisma.doctorSlot.findMany({
       where: {
         doctorId,
         dayOfWeek,
@@ -174,7 +163,7 @@ export class DoctorsService {
       orderBy: { startTime: 'asc' },
     });
 
-    if (slots.length === 0) {
+    if (doctorSlots.length === 0) {
       return []; // Doctor doesn't have slots on this day
     }
 
@@ -183,12 +172,6 @@ export class DoctorsService {
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-
-    console.log('[DoctorsService] Query appointments:', { 
-      doctorId, 
-      startOfDay: startOfDay.toISOString(), 
-      endOfDay: endOfDay.toISOString() 
-    });
 
     const existingAppointments = await this.prisma.appointment.findMany({
       where: {
@@ -205,21 +188,33 @@ export class DoctorsService {
       },
     });
 
-    console.log('[DoctorsService] Found appointments:', existingAppointments);
+    // Convert doctor slots to available slots format, marking conflicts
+    const availableSlots = doctorSlots.map(slot => {
+      // Check if slot conflicts with existing appointments
+      const hasConflict = existingAppointments.some(apt => {
+        const toMinutes = (time: string) => {
+          const [h, m] = time.split(':').map(Number);
+          return h * 60 + m;
+        };
+        
+        const slotStartMin = toMinutes(slot.startTime);
+        const slotEndMin = toMinutes(slot.endTime);
+        const aptStartMin = toMinutes(apt.startTime);
+        const aptEndMin = toMinutes(apt.endTime);
+        
+        return (
+          (slotStartMin >= aptStartMin && slotStartMin < aptEndMin) ||
+          (slotEndMin > aptStartMin && slotEndMin <= aptEndMin) ||
+          (slotStartMin <= aptStartMin && slotEndMin >= aptEndMin)
+        );
+      });
 
-    // Generate available slots from each slot definition
-    const availableSlots: Array<{ startTime: string; endTime: string; isBooked?: boolean }> = [];
-
-    for (const slot of slots) {
-      const slotAvailable = this.calculateAvailableSlots(
-        slot.startTime,
-        slot.endTime,
-        service.duration,
-        slot.bufferTime,
-        existingAppointments,
-      );
-      availableSlots.push(...slotAvailable);
-    }
+      return {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        isBooked: hasConflict,
+      };
+    });
 
     // Sort by start time
     availableSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -338,6 +333,7 @@ export class DoctorsService {
         bio: createDoctorDto.bio,
         branchId: createDoctorDto.branchId,
         isActive: createDoctorDto.isActive ?? true,
+        profileImage: createDoctorDto.profileImage || null,
       },
       select: {
         id: true,
@@ -348,6 +344,7 @@ export class DoctorsService {
         email: true,
         bio: true,
         isActive: true,
+        profileImage: true,
         createdAt: true,
         updatedAt: true,
         branchId: true,
@@ -405,6 +402,7 @@ export class DoctorsService {
         bio: updateDoctorDto.bio,
         branchId: updateDoctorDto.branchId,
         isActive: updateDoctorDto.isActive,
+        profileImage: updateDoctorDto.profileImage,
       },
       select: {
         id: true,
@@ -415,6 +413,7 @@ export class DoctorsService {
         email: true,
         bio: true,
         isActive: true,
+        profileImage: true,
         createdAt: true,
         updatedAt: true,
         branchId: true,

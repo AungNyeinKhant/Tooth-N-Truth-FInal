@@ -8,7 +8,7 @@ import { API_ENDPOINTS } from "@/lib/constants";
 const getRedirectUrl = (role: string): string => {
   switch (role) {
     case "PATIENT":
-      return "/";
+      return "/dashboard";
 
     case "BRANCH_MANAGER":
       return "/branch-manager/dashboard";
@@ -17,6 +17,17 @@ const getRedirectUrl = (role: string): string => {
     default:
       return "/";
   }
+};
+
+// Helper to set access token cookies
+const setAccessTokenCookie = (token: string) => {
+  const isProduction = window.location.protocol === 'https:';
+  document.cookie = `accessToken=${token}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
+};
+
+// Helper to clear access token cookies
+const clearAccessTokenCookie = () => {
+  document.cookie = "accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 };
 
 interface AuthStore extends AuthState {
@@ -48,16 +59,11 @@ export const useAuthStore = create<AuthStore>()(
           );
           const { accessToken, user } = response.data.data;
 
-          // Store only access token in localStorage
-          // Refresh token is now in HttpOnly cookie (handled by backend)
+          // Store access token in localStorage
           localStorage.setItem("accessToken", accessToken);
-
-          // Also set cookie for middleware SSR authentication
-          // Note: accessToken cookie is NOT HttpOnly (needed for middleware)
-          // refreshToken cookie IS HttpOnly (set by backend, secure from XSS)
-          // max-age=900 (15 min) matches JWT_ACCESS_EXPIRATION
-          const isProduction = window.location.protocol === 'https:';
-          document.cookie = `accessToken=${accessToken}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
+          
+          // Set cookie for middleware SSR authentication
+          setAccessTokenCookie(accessToken);
 
           set({
             user,
@@ -87,16 +93,11 @@ export const useAuthStore = create<AuthStore>()(
           );
           const { accessToken, user } = response.data.data;
 
-          // Store only access token in localStorage
-          // Refresh token is now in HttpOnly cookie (handled by backend)
+          // Store access token in localStorage
           localStorage.setItem("accessToken", accessToken);
-
-          // Also set cookie for middleware SSR authentication
-          // Note: accessToken cookie is NOT HttpOnly (needed for middleware)
-          // refreshToken cookie IS HttpOnly (set by backend, secure from XSS)
-          // max-age=900 (15 min) matches JWT_ACCESS_EXPIRATION
-          const isProduction = window.location.protocol === 'https:';
-          document.cookie = `accessToken=${accessToken}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
+          
+          // Set cookie for middleware SSR authentication
+          setAccessTokenCookie(accessToken);
 
           set({
             user,
@@ -118,18 +119,14 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: async () => {
         try {
-          // Call backend logout to clear HttpOnly cookie
+          // Call backend logout to clear HttpOnly refresh token cookie
           await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
         } catch (error) {
-          // Even if backend fails, proceed with client-side logout
           console.error("Logout error:", error);
         }
 
         localStorage.removeItem("accessToken");
-
-        // Clear the authentication cookie
-        document.cookie =
-          "accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        clearAccessTokenCookie();
 
         set({
           user: null,
@@ -140,13 +137,43 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       checkAuth: async () => {
-        const token = localStorage.getItem("accessToken");
-        console.log("[AuthStore] checkAuth - token exists:", !!token);
+        let token = localStorage.getItem("accessToken");
+        console.log("[AuthStore] checkAuth - token in localStorage:", !!token);
         
+        // If no access token, try to refresh using refresh token cookie
         if (!token) {
-          console.log("[AuthStore] checkAuth - no token, setting unauthenticated");
-          set({ isAuthenticated: false, user: null });
-          return;
+          console.log("[AuthStore] No access token, attempting to refresh...");
+          try {
+            const refreshResponse = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH);
+            const { accessToken: newToken, user: newUser } = refreshResponse.data.data;
+            
+            console.log("[AuthStore] Token refresh successful!");
+            
+            // Store new access token
+            localStorage.setItem("accessToken", newToken);
+            setAccessTokenCookie(newToken);
+            
+            set({
+              user: newUser,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
+            return;
+          } catch (refreshError: any) {
+            console.log("[AuthStore] Token refresh failed:", refreshError.message);
+            
+            // Refresh failed - call backend logout to clear any stale cookies
+            try {
+              await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
+            } catch (logoutError) {
+              console.log("[AuthStore] Backend logout called");
+            }
+            
+            clearAccessTokenCookie();
+            set({ isAuthenticated: false, user: null, isLoading: false });
+            return;
+          }
         }
 
         set({ isLoading: true });
@@ -156,9 +183,7 @@ export const useAuthStore = create<AuthStore>()(
           console.log("[AuthStore] checkAuth - success:", response.data.data);
 
           // Ensure cookie is set for SSR
-          // max-age=900 (15 min) matches JWT_ACCESS_EXPIRATION
-          const isProduction = window.location.protocol === 'https:';
-          document.cookie = `accessToken=${token}; path=/; max-age=900; SameSite=Lax${isProduction ? '; Secure' : ''}`;
+          setAccessTokenCookie(token);
 
           set({
             user: response.data.data,
@@ -168,9 +193,37 @@ export const useAuthStore = create<AuthStore>()(
           });
         } catch (error: any) {
           console.error("[AuthStore] checkAuth - error:", error.message);
+          
+          // Token might be invalid - try to refresh
+          if (error.response?.status === 401) {
+            console.log("[AuthStore] 401 error, trying to refresh...");
+            try {
+              const refreshResponse = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH);
+              const { accessToken: newToken, user: newUser } = refreshResponse.data.data;
+              
+              localStorage.setItem("accessToken", newToken);
+              setAccessTokenCookie(newToken);
+              
+              set({
+                user: newUser,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null,
+              });
+              return;
+            } catch (refreshError) {
+              console.log("[AuthStore] Refresh failed, logging out...");
+            }
+          }
+          
+          // If all else fails, clear everything and call backend logout
           localStorage.removeItem("accessToken");
-          document.cookie =
-            "accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          clearAccessTokenCookie();
+          
+          try {
+            await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
+          } catch (logoutError) {}
+          
           set({
             user: null,
             isAuthenticated: false,

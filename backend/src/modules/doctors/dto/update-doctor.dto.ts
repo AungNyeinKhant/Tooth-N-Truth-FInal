@@ -69,4 +69,12 @@ export class UpdateDoctorDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Doctor profile image URL',
+    example: 'https://res.cloudinary.com/.../image.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
 }

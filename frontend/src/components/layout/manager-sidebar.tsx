@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import { User } from "@/types";
+import { User as UserType } from "@/types";
 import {
   LayoutDashboard,
   Calendar,
@@ -13,13 +13,13 @@ import {
   ClipboardList,
   BarChart3,
   LogOut,
-  Settings,
+  User as UserIcon,
 } from "lucide-react";
 
 interface ManagerSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  user: User | null;
+  user: UserType | null;
 }
 
 const navigation = [
@@ -54,9 +54,9 @@ const navigation = [
     icon: BarChart3,
   },
   {
-    name: "Settings",
-    href: "/branch-manager/settings",
-    icon: Settings,
+    name: "My Profile",
+    href: "/branch-manager/profile",
+    icon: UserIcon,
   },
 ];
 

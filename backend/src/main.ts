@@ -4,14 +4,18 @@ import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import helmet from "helmet";
 import * as cors from "cors";
 import * as cookieParser from "cookie-parser";
+import { NestExpressApplication } from "@nestjs/platform-express";
 
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Cookie parser middleware - for HttpOnly cookies
   app.use(cookieParser());
+
+  // File upload middleware - increase limit for profile images
+  app.useBodyParser("json", { limit: "10mb" });
 
   // Security middleware - Helmet
   app.use(
@@ -35,7 +39,12 @@ async function bootstrap() {
       origin: process.env.FRONTEND_URL || "http://localhost:3000",
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Content-Disposition",
+      ],
     }),
   );
 

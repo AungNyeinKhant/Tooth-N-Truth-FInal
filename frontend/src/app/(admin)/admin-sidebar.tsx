@@ -11,10 +11,10 @@ import {
   Stethoscope,
   Users,
   Calendar,
-  Settings,
   LogOut,
   BarChart3,
   CalendarClock,
+  Settings,
 } from "lucide-react";
 
 interface AdminSidebarProps {

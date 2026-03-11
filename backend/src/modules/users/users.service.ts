@@ -149,6 +149,16 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // If changing email, check uniqueness
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
+      const existing = await this.prisma.user.findUnique({
+        where: { email: updateUserDto.email },
+      });
+      if (existing) {
+        throw new ConflictException('Email is already in use by another account');
+      }
+    }
+
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: {
@@ -156,6 +166,7 @@ export class UsersService {
         lastName: updateUserDto.lastName,
         phone: updateUserDto.phone,
         isActive: updateUserDto.isActive,
+        ...(updateUserDto.email ? { email: updateUserDto.email } : {}),
       },
       select: {
         id: true,
@@ -314,5 +325,42 @@ export class UsersService {
       message: 'Password reset successfully',
       tempPassword,
     };
+  }
+
+  /**
+   * Change own password (requires current password verification)
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if user has a password (Google OAuth users might not have one)
+    if (!user.password) {
+      throw new BadRequestException(
+        'This account uses Google Sign-in. Please set a password first.',
+      );
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password changed successfully' };
   }
 }

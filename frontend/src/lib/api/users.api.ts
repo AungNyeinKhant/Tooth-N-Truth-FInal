@@ -11,6 +11,8 @@ export interface User {
   lastName: string;
   phone: string | null;
   isActive: boolean;
+  googleId?: string | null;
+  googleEmail?: string | null;
   createdAt: string;
   updatedAt: string;
   branch?: {
@@ -50,6 +52,7 @@ export interface UserQuery {
 export interface UpdateUserData {
   firstName?: string;
   lastName?: string;
+  email?: string;
   phone?: string;
   isActive?: boolean;
 }
@@ -102,5 +105,30 @@ export const usersApi = {
   resetPassword: (id: string) => {
     console.log('[Users API] Resetting password:', id);
     return apiClient.post<ResetPasswordResponse>(`${API_ENDPOINTS.USERS}/${id}/reset-password`);
+  },
+
+  changePassword: (currentPassword: string, newPassword: string) => {
+    console.log('[Users API] Changing own password');
+    return apiClient.patch<{ message: string }>(`${API_ENDPOINTS.USERS}/me/password`, {
+      currentPassword,
+      newPassword,
+    });
+  },
+
+  // Google account linking
+  getGoogleStatus: () => {
+    console.log('[Users API] Getting Google status');
+    // Backend returns { success: true, data: {...} }
+    return apiClient.get<{ success: boolean; data: { isLinked: boolean; googleEmail: string | null; hasPassword: boolean } }>('/api/auth/google-status');
+  },
+
+  setPassword: (newPassword: string) => {
+    console.log('[Users API] Setting password');
+    return apiClient.post<{ message: string }>('/api/auth/set-password', { newPassword });
+  },
+
+  unlinkGoogle: () => {
+    console.log('[Users API] Unlinking Google account');
+    return apiClient.post<{ message: string }>('/api/auth/unlink-google');
   },
 };
