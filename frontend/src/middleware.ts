@@ -84,8 +84,8 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 2. Home page (/) - ALWAYS PUBLIC
-  if (pathname === '/') {
+  // 2. Home page (/) and book page (/book) - ALWAYS PUBLIC
+  if (pathname === '/' || pathname === '/book') {
     return NextResponse.next();
   }
 

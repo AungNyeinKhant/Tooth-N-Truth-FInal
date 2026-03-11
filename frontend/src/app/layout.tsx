@@ -21,7 +21,8 @@ export default function RootLayout({
 
   useEffect(() => {
     const isAuthRoute = pathname === '/login' || pathname === '/register';
-    if (!isAuthRoute) {
+    const isPublicRoute = pathname === '/' || pathname === '/book';
+    if (!isAuthRoute && !isPublicRoute) {
       checkAuth();
     }
   }, [checkAuth, pathname]);

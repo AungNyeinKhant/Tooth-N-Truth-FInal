@@ -1,21 +1,29 @@
 'use client';
 
-import { useAppointmentStore } from '@/stores';
 import { Card } from '@/components/ui';
 import { Calendar as CalendarIcon, Clock } from 'lucide-react';
 
-interface StepDateTimeProps {
-  availableSlots: Array<{
-    startTime: string;
-    endTime: string;
-    isBooked?: boolean;
-  }>;
-  isLoading: boolean;
+interface TimeSlot {
+  startTime: string;
+  endTime: string;
+  isBooked?: boolean;
 }
 
-export default function StepDateTime({ availableSlots, isLoading }: StepDateTimeProps) {
-  const { selectedDate, selectedSlot, setDate, setSlot } = useAppointmentStore();
+interface StepDateTimeProps {
+  availableSlots: TimeSlot[];
+  isLoading: boolean;
+  onSelect: (date: Date | null, slot?: TimeSlot | null) => void;
+  selectedDate: Date | null;
+  selectedSlot: TimeSlot | null;
+}
 
+export default function StepDateTime({ 
+  availableSlots, 
+  isLoading, 
+  onSelect,
+  selectedDate,
+  selectedSlot,
+}: StepDateTimeProps) {
   // Generate next 14 days
   const getAvailableDates = () => {
     const dates = [];
@@ -65,7 +73,7 @@ export default function StepDateTime({ availableSlots, isLoading }: StepDateTime
           {availableDates.map((date, index) => (
             <button
               key={index}
-              onClick={() => setDate(date)}
+              onClick={() => onSelect(date)}
               className={`p-3 rounded-lg text-center transition-all ${
                 isSelectedDate(date)
                   ? 'bg-primary-cyan text-white'
@@ -98,7 +106,7 @@ export default function StepDateTime({ availableSlots, isLoading }: StepDateTime
               {availableSlots.map((slot, index) => (
                 <button
                   key={index}
-                  onClick={() => !slot.isBooked && setSlot(slot)}
+                  onClick={() => !slot.isBooked && onSelect(selectedDate, slot)}
                   disabled={slot.isBooked}
                   className={`p-3 rounded-lg text-center transition-all ${
                     selectedSlot?.startTime === slot.startTime
