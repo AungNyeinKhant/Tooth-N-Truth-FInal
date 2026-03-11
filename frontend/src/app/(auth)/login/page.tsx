@@ -102,6 +102,10 @@ export default function LoginPage() {
           <div className="mt-6">
             <a
               href={`${API_BASE_URL}${API_ENDPOINTS.AUTH.GOOGLE}`}
+              onClick={() => {
+                // Store current URL for redirect after Google login
+                sessionStorage.setItem('bookingRedirect', window.location.href);
+              }}
               className="w-full flex justify-center items-center gap-3 px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               <GoogleIcon className="w-5 h-5" />

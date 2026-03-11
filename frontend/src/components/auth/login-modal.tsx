@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Button, Input, Card } from '@/components/ui';
 import { useAuthStore, useUIStore } from '@/stores';
 import { Mail, Lock, X } from 'lucide-react';
+import { API_BASE_URL, API_ENDPOINTS } from '@/lib/constants';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -60,6 +61,15 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
     } catch (err) {
       // Error is handled by the store
     }
+  };
+
+  const handleGoogleLogin = () => {
+    // Store the current URL (with all booking selections) for redirect after Google login
+    const currentUrl = window.location.href;
+    sessionStorage.setItem('bookingRedirect', currentUrl);
+    
+    // Redirect to Google OAuth
+    window.location.href = `${API_BASE_URL}${API_ENDPOINTS.AUTH.GOOGLE}`;
   };
 
   if (!isOpen) return null;
@@ -133,21 +143,19 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or</span>
+                <span className="px-2 bg-white text-gray-500">Or continue with</span>
               </div>
             </div>
 
+            {/* Google Login Button */}
             <div className="mt-4">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  router.push('/register?redirect=/book');
-                }}
-                className="w-full flex justify-center items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full flex justify-center items-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
-                Create an account
-              </a>
+                <GoogleIcon />
+                Sign in with Google
+              </button>
             </div>
           </div>
 

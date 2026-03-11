@@ -78,7 +78,15 @@ export default function RegisterPage() {
       });
       
       addToast('Registration successful! Welcome to Tooth & Truth.', 'success');
-      router.push('/dashboard');
+      
+      // Check if there's a stored booking redirect URL
+      const bookingRedirect = sessionStorage.getItem('bookingRedirect');
+      if (bookingRedirect) {
+        sessionStorage.removeItem('bookingRedirect');
+        router.push(bookingRedirect);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (error) {
       // Error is handled by the store
     }
@@ -199,6 +207,10 @@ export default function RegisterPage() {
           <div className="mt-6">
             <a
               href={`${API_BASE_URL}${API_ENDPOINTS.AUTH.GOOGLE}`}
+              onClick={() => {
+                // Store current URL for redirect after Google signup
+                sessionStorage.setItem('bookingRedirect', window.location.href);
+              }}
               className="w-full flex justify-center items-center gap-3 px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               <GoogleIcon className="w-5 h-5" />
