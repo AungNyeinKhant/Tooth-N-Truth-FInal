@@ -162,8 +162,8 @@ export default function ProfilePage() {
     setIsLoadingGoogleStatus(true);
     try {
       const response = await usersApi.getGoogleStatus();
-      setGoogleStatus(response.data);
-      console.log('[Profile] Google status:', response.data);
+      setGoogleStatus(response.data.data);
+      console.log('[Profile] Google status:', response.data.data);
     } catch (error: any) {
       console.error('Error fetching Google status:', error);
     } finally {
@@ -176,8 +176,8 @@ export default function ProfilePage() {
     setIsLoadingCalendarStatus(true);
     try {
       const response = await calendarApi.getStatus();
-      setCalendarStatus(response.data);
-      console.log('[Profile] Calendar status:', response.data);
+      setCalendarStatus(response.data.data);
+      console.log('[Profile] Calendar status:', response.data.data);
     } catch (error: any) {
       console.error('Error fetching calendar status:', error);
     } finally {

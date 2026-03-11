@@ -413,6 +413,12 @@ export class AppointmentsService {
             duration: true,
           },
         },
+        branch: {
+          select: {
+            name: true,
+            address: true,
+          },
+        },
       },
     });
 
@@ -426,18 +432,46 @@ export class AppointmentsService {
         const [startHours, startMinutes] = startTime.split(':').map(Number);
         const [endHours, endMinutes] = endTime.split(':').map(Number);
         
+        // Create dates using local time
         const eventStartTime = new Date(dateObj);
         eventStartTime.setHours(startHours, startMinutes, 0, 0);
         
         const eventEndTime = new Date(dateObj);
         eventEndTime.setHours(endHours, endMinutes, 0, 0);
 
+        // Format the appointment time for display
+        const formatTime = (timeStr: string) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          const period = h >= 12 ? 'PM' : 'AM';
+          const displayH = h % 12 || 12;
+          return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+        };
+
+        const formattedDate = new Date(dateObj).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+
         await this.calendarService.updateCalendarEvent(
           patientUserId,
           id,
           {
-            summary: `Dental Appointment - ${updated.service.name}`,
-            description: `Appointment with Dr. ${updated.doctor.firstName} ${updated.doctor.lastName}.\n\nNotes: ${updated.notes || 'None'}`,
+            summary: 'Tooth & Truth appointment',
+            description: `Clinic: Tooth & Truth Dental Clinic
+Branch: ${updated.branch.name}
+Address: ${updated.branch.address || 'N/A'}
+
+Service: ${updated.service.name}
+Doctor: Dr. ${updated.doctor.firstName} ${updated.doctor.lastName}
+Date: ${formattedDate}
+Time: ${formatTime(startTime)} - ${formatTime(endTime)}
+
+Notes: ${updated.notes || 'None'}
+
+Please arrive 10 minutes before your scheduled appointment time.`,
+            location: updated.branch.name,
             startTime: eventStartTime,
             endTime: eventEndTime,
           },
@@ -995,24 +1029,73 @@ export class AppointmentsService {
 
     // Create Google Calendar event if patient has calendar connected and sync enabled
     try {
+      console.log('[Calendar] Checking calendar status for user:', userId);
       const calendarStatus = await this.calendarService.getCalendarStatus(userId);
+      console.log('[Calendar] Calendar status:', JSON.stringify(calendarStatus));
+      
+      if (!calendarStatus.isConnected) {
+        console.log('[Calendar] Calendar not connected, skipping event creation');
+      } else if (!calendarStatus.syncEnabled) {
+        console.log('[Calendar] Calendar sync is disabled, skipping event creation. User needs to enable sync in profile.');
+      }
+      
       if (calendarStatus.isConnected && calendarStatus.syncEnabled) {
-        // Calculate start and end Date objects
+        // Parse the appointment date components
+        const [year, month, day] = appointmentDate.split('-').map(Number);
         const [startHours, startMinutes] = startTime.split(':').map(Number);
         const [endHours, endMinutes] = endTime.split(':').map(Number);
         
-        const eventStartTime = new Date(dateObj);
-        eventStartTime.setHours(startHours, startMinutes, 0, 0);
+        // Myanmar timezone is UTC+6:30, but server is in Thai timezone (UTC+7)
+        // We need to create the date in UTC so Google Calendar interprets it correctly
+        // Calculate offset: Thai (UTC+7) - Myanmar (UTC+6:30) = 30 minutes
+        const offsetMinutes = 30; // Server is 30 min ahead of Myanmar
         
-        const eventEndTime = new Date(dateObj);
-        eventEndTime.setHours(endHours, endMinutes, 0, 0);
+        // Create date in local server time first
+        const localStart = new Date(year, month - 1, day, startHours, startMinutes, 0);
+        const localEnd = new Date(year, month - 1, day, endHours, endMinutes, 0);
+        
+        // Adjust for timezone difference (subtract 30 minutes to convert Thai to Myanmar time)
+        const eventStartTime = new Date(localStart.getTime() - offsetMinutes * 60 * 1000);
+        const eventEndTime = new Date(localEnd.getTime() - offsetMinutes * 60 * 1000);
+
+        console.log('[Calendar] Creating event with times:', {
+          startTime: eventStartTime.toISOString(),
+          endTime: eventEndTime.toISOString(),
+        });
+
+        // Format the appointment time for display
+        const formatTime = (timeStr: string) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          const period = h >= 12 ? 'PM' : 'AM';
+          const displayH = h % 12 || 12;
+          return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+        };
+
+        const formattedDate = new Date(year, month - 1, day).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
 
         await this.calendarService.createCalendarEvent(
           userId,
           appointment.id,
           {
-            summary: `Dental Appointment - ${appointment.service.name}`,
-            description: `Appointment with Dr. ${appointment.doctor.firstName} ${appointment.doctor.lastName} at ${appointment.branch.name}.\n\nNotes: ${notes || 'None'}`,
+            summary: 'Tooth & Truth appointment',
+            description: `Clinic: Tooth & Truth Dental Clinic
+Branch: ${appointment.branch.name}
+Address: ${appointment.branch.address || 'N/A'}
+
+Service: ${appointment.service.name}
+Doctor: Dr. ${appointment.doctor.firstName} ${appointment.doctor.lastName}
+Date: ${formattedDate}
+Time: ${formatTime(startTime)} - ${formatTime(endTime)}
+
+Notes: ${notes || 'None'}
+
+Please arrive 10 minutes before your scheduled appointment time.`,
+            location: appointment.branch.name,
             startTime: eventStartTime,
             endTime: eventEndTime,
           },

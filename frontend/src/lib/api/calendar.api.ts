@@ -6,6 +6,12 @@ export interface CalendarStatus {
   lastSyncAt: string | null;
 }
 
+// Backend returns { success: true, data: CalendarStatus }
+interface CalendarStatusResponse {
+  success: boolean;
+  data: CalendarStatus;
+}
+
 export const calendarApi = {
   // Get calendar OAuth URL
   getConnectUrl: () => {
@@ -16,7 +22,7 @@ export const calendarApi = {
   // Get calendar status
   getStatus: () => {
     console.log('[Calendar API] Getting status');
-    return apiClient.get<CalendarStatus>('/api/calendar/status');
+    return apiClient.get<CalendarStatusResponse>('/api/calendar/status');
   },
 
   // Toggle sync

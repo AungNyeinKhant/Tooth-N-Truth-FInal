@@ -229,14 +229,41 @@ export class CalendarService {
     eventData: {
       summary: string;
       description?: string;
+      location?: string;
       startTime: Date;
       endTime: Date;
     },
   ): Promise<string> {
     const accessToken = await this.getAccessToken(userId);
     if (!accessToken) {
+      console.log('[Calendar] No access token found');
       throw new BadRequestException('Calendar not connected');
     }
+
+    // Use Myanmar timezone (Asia/Yangon) - UTC+6:30
+    const timeZone = 'Asia/Yangon';
+
+    const requestBody = {
+      summary: eventData.summary,
+      description: eventData.description,
+      location: eventData.location,
+      start: {
+        dateTime: eventData.startTime.toISOString(),
+        timeZone: timeZone,
+      },
+      end: {
+        dateTime: eventData.endTime.toISOString(),
+        timeZone: timeZone,
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 60 }, // 1 hour before
+        ],
+      },
+    };
+
+    console.log('[Calendar] Creating event - Request body:', JSON.stringify(requestBody, null, 2));
 
     const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
@@ -244,33 +271,19 @@ export class CalendarService {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        summary: eventData.summary,
-        description: eventData.description,
-        start: {
-          dateTime: eventData.startTime.toISOString(),
-          timeZone: 'Asia/Manila',
-        },
-        end: {
-          dateTime: eventData.endTime.toISOString(),
-          timeZone: 'Asia/Manila',
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'email', minutes: 24 * 60 }, // 1 day before
-            { method: 'popup', minutes: 60 }, // 1 hour before
-          ],
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
+
+    console.log('[Calendar] Response status:', response.status);
 
     if (!response.ok) {
       const error = await response.text();
+      console.log('[Calendar] Error response:', error);
       throw new BadRequestException(`Failed to create calendar event: ${error}`);
     }
 
     const event = await response.json();
+    console.log('[Calendar] Event created successfully:', JSON.stringify(event, null, 2));
 
     // Store event ID in appointment
     await this.prisma.appointment.update({
@@ -290,6 +303,7 @@ export class CalendarService {
     eventData: {
       summary?: string;
       description?: string;
+      location?: string;
       startTime?: Date;
       endTime?: Date;
     },
@@ -307,19 +321,23 @@ export class CalendarService {
       return; // No event to update
     }
 
+    // Use Myanmar timezone (Asia/Yangon) - UTC+6:30
+    const timeZone = 'Asia/Yangon';
+
     const updateBody: any = {};
     if (eventData.summary) updateBody.summary = eventData.summary;
     if (eventData.description) updateBody.description = eventData.description;
+    if (eventData.location) updateBody.location = eventData.location;
     if (eventData.startTime) {
       updateBody.start = {
         dateTime: eventData.startTime.toISOString(),
-        timeZone: 'Asia/Manila',
+        timeZone: timeZone,
       };
     }
     if (eventData.endTime) {
       updateBody.end = {
         dateTime: eventData.endTime.toISOString(),
-        timeZone: 'Asia/Manila',
+        timeZone: timeZone,
       };
     }
 

@@ -118,7 +118,8 @@ export const usersApi = {
   // Google account linking
   getGoogleStatus: () => {
     console.log('[Users API] Getting Google status');
-    return apiClient.get<{ isLinked: boolean; googleEmail: string | null; hasPassword: boolean }>('/api/auth/google-status');
+    // Backend returns { success: true, data: {...} }
+    return apiClient.get<{ success: boolean; data: { isLinked: boolean; googleEmail: string | null; hasPassword: boolean } }>('/api/auth/google-status');
   },
 
   setPassword: (newPassword: string) => {
