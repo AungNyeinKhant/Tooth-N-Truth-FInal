@@ -303,6 +303,9 @@ export function BookingWizard() {
   const handleBack = () => {
     if (currentStep > 1) {
       handleStepChange(currentStep - 1);
+    } else {
+      // On step 1, redirect to home
+      router.push('/');
     }
   };
 
@@ -485,9 +488,8 @@ export function BookingWizard() {
         <Button
           variant='outline'
           onClick={handleBack}
-          disabled={currentStep === 1}
         >
-          Back
+          {currentStep === 1 ? 'Back to Home' : 'Back'}
         </Button>
 
         {currentStep < steps.length ? (

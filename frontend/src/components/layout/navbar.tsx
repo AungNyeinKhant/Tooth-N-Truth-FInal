@@ -69,7 +69,28 @@ export function Navbar() {
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            {/* Public Navigation Links */}
+            <div className="hidden md:flex items-center gap-4">
+              <Link 
+                href="/about" 
+                className={`text-sm font-medium hover:text-primary-cyan transition-colors ${pathname === '/about' ? 'text-primary-cyan' : 'text-text-navy'}`}
+              >
+                About
+              </Link>
+              <Link 
+                href="/services" 
+                className={`text-sm font-medium hover:text-primary-cyan transition-colors ${pathname === '/services' ? 'text-primary-cyan' : 'text-text-navy'}`}
+              >
+                Services
+              </Link>
+              <Link href="/book">
+                <span className="text-sm font-medium text-[#FF6B35] hover:text-[#e85e2a] transition-colors cursor-pointer">
+                  Book Now
+                </span>
+              </Link>
+            </div>
+            
             {isAuthenticated ? (
               <>
                 <span className="hidden md:block text-sm text-text-gray">
