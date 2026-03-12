@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, Button } from "@/components/ui";
 import { useAppointmentStore, useAuthStore, useUIStore } from "@/stores";
 import {
@@ -15,6 +15,7 @@ import StepService from "./booking-wizard/step-service";
 import StepDoctor from "./booking-wizard/step-doctor";
 import StepDateTime from "./booking-wizard/step-datetime";
 import StepConfirm from "./booking-wizard/step-confirm";
+import LoginModal from "../auth/login-modal";
 
 const steps = [
   { id: 1, name: "Select Branch" },
@@ -26,10 +27,14 @@ const steps = [
 
 export function BookingWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addToast } = useUIStore();
-  const { user } = useAuthStore();
+  const { user, isAuthenticated, checkAuth } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState(false);
+
   const extractList = (response: any) => {
     const data = response?.data;
     if (Array.isArray(data)) return data;
@@ -57,11 +62,39 @@ export function BookingWizard() {
     setDoctors,
     setAvailableSlots,
     setLoading,
+    setBranch,
+    setService,
+    setDoctor,
     reset,
   } = useAppointmentStore();
 
-  // Load initial data
+  // Helper to update URL params
+  const updateUrlParams = useCallback((params: Record<string, string | null>) => {
+    const url = new URL(window.location.href);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) {
+        url.searchParams.set(key, value);
+      } else {
+        url.searchParams.delete(key);
+      }
+    });
+    router.replace(url.toString(), { scroll: false });
+  }, [router]);
+
+  // Load state from URL params on mount
   useEffect(() => {
+    const branchId = searchParams.get("branch");
+    const serviceId = searchParams.get("service");
+    const doctorId = searchParams.get("doctor");
+    const dateStr = searchParams.get("date");
+    const time = searchParams.get("time");
+    const step = searchParams.get("step");
+
+    if (step) {
+      setCurrentStep(parseInt(step, 10));
+    }
+
+    // Load initial data first
     const loadInitialData = async () => {
       setLoading(true);
       try {
@@ -70,47 +103,63 @@ export function BookingWizard() {
           servicesApi.getAll(),
         ]);
 
-        console.log("[Booking] Raw branchesRes:", branchesRes);
-        console.log("[Booking] Raw branchesRes.data:", branchesRes.data);
-
-        // The API returns { data: [...], meta: {...} }
-        // axios adds another .data wrapper, so we access branchesRes.data.data
         const branchesList = extractList(branchesRes);
-        console.log("[Booking] Final branchesList:", branchesList);
-
         const servicesList = extractList(servicesRes);
-        console.log("[Booking] Final servicesList:", servicesList);
 
         setBranches(Array.isArray(branchesList) ? branchesList : []);
         setServices(Array.isArray(servicesList) ? servicesList : []);
+
+        // Find and set branch from URL
+        if (branchId) {
+          const branch = branchesList.find((b: any) => b.id === branchId);
+          if (branch) {
+            console.log('[Booking] Setting branch from URL:', branch);
+            setBranch(branch);
+          }
+        }
+
+        // Find and set service from URL
+        if (serviceId) {
+          const service = servicesList.find((s: any) => s.id === serviceId);
+          if (service) {
+            console.log('[Booking] Setting service from URL:', service);
+            setService(service);
+          }
+        }
       } catch (error) {
         console.error("Failed to load initial data:", error);
         addToast("Failed to load initial data", "error");
-        setBranches([]);
-        setServices([]);
       } finally {
         setLoading(false);
       }
     };
 
     loadInitialData();
-  }, [setBranches, setServices, setLoading, addToast]);
+  }, []);
 
-  // Load doctors when branch is selected
+  // Load doctors when branch is selected (from URL or store)
   useEffect(() => {
+    console.log('[Booking] selectedBranch changed:', selectedBranch);
     if (selectedBranch) {
       const loadDoctors = async () => {
         setLoading(true);
+        console.log('[Booking] Loading doctors for branch:', selectedBranch.id);
         try {
           const res = await doctorsApi.getAll({ branchId: selectedBranch.id });
-
-          console.log("[Booking] Raw doctorsRes:", res);
-          console.log("[Booking] Raw doctorsRes.data:", res.data);
-
+          console.log('[Booking] Doctors API response:', res.data);
           const doctorsList = extractList(res);
-          console.log("[Booking] Final doctorsList:", doctorsList);
-
+          console.log('[Booking] Extracted doctors list:', doctorsList);
           setDoctors(Array.isArray(doctorsList) ? doctorsList : []);
+
+          // Check if doctor is in URL
+          const doctorId = searchParams.get("doctor");
+          if (doctorId) {
+            const doctor = doctorsList.find((d: any) => d.id === doctorId);
+            if (doctor) {
+              console.log('[Booking] Setting doctor from URL:', doctor);
+              setDoctor(doctor);
+            }
+          }
         } catch (error) {
           console.error("Failed to load doctors:", error);
           addToast("Failed to load doctors", "error");
@@ -122,7 +171,7 @@ export function BookingWizard() {
 
       loadDoctors();
     }
-  }, [selectedBranch, setDoctors, setLoading, addToast]);
+  }, [selectedBranch]);
 
   // Load available slots when date is selected
   useEffect(() => {
@@ -130,21 +179,17 @@ export function BookingWizard() {
       const loadSlots = async () => {
         setLoading(true);
         try {
-          // Format date as YYYY-MM-DD in LOCAL timezone to match backend
           const year = selectedDate.getFullYear();
           const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
           const day = String(selectedDate.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}`;
-          
-          console.log('[Booking] Loading slots - doctor:', selectedDoctor.id, 'date:', dateStr, 'service:', selectedService.id);
           
           const res = await doctorsApi.getAvailableSlots(
             selectedDoctor.id,
             dateStr,
             selectedService.id,
           );
-          // Handle slots response - API may return array or { data: [...], meta: {...} }
-          console.log('[Booking] Slots API response:', res.data);
+          
           let slotsData: any = res.data;
           if (
             slotsData &&
@@ -154,8 +199,17 @@ export function BookingWizard() {
           ) {
             slotsData = slotsData.data;
           }
-          console.log('[Booking] Processed slots:', slotsData);
+          
           setAvailableSlots(Array.isArray(slotsData) ? slotsData : []);
+
+          // Check if time is in URL
+          const time = searchParams.get("time");
+          if (time) {
+            const slot = slotsData.find((s: any) => s.startTime === time);
+            if (slot) {
+              useAppointmentStore.getState().setSlot(slot);
+            }
+          }
         } catch (error) {
           console.error("Failed to load available slots:", error);
           addToast("Failed to load available slots", "error");
@@ -167,28 +221,102 @@ export function BookingWizard() {
 
       loadSlots();
     }
-  }, [
-    selectedDoctor,
-    selectedDate,
-    selectedService,
-    setAvailableSlots,
-    setLoading,
-    addToast,
-  ]);
+  }, [selectedDoctor, selectedDate, selectedService]);
 
-  const handleNext = () => {
-    if (currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
+  // Handle step change and update URL
+  const handleStepChange = (newStep: number) => {
+    setCurrentStep(newStep);
+    updateUrlParams({ step: newStep.toString() });
+  };
+
+  // Handle branch selection and update URL
+  const handleBranchSelect = (branch: any) => {
+    useAppointmentStore.getState().setBranch(branch);
+    updateUrlParams({ 
+      branch: branch?.id || null,
+      doctor: null,
+      service: null,
+      date: null,
+      time: null,
+      step: '2'
+    });
+    setCurrentStep(2);
+  };
+
+  // Handle service selection and update URL
+  const handleServiceSelect = (service: any) => {
+    useAppointmentStore.getState().setService(service);
+    updateUrlParams({ 
+      service: service?.id || null,
+      doctor: null,
+      date: null,
+      time: null,
+      step: '3'
+    });
+    setCurrentStep(3);
+  };
+
+  // Handle doctor selection and update URL
+  const handleDoctorSelect = (doctor: any) => {
+    useAppointmentStore.getState().setDoctor(doctor);
+    updateUrlParams({ 
+      doctor: doctor?.id || null,
+      date: null,
+      time: null,
+      step: '4'
+    });
+    setCurrentStep(4);
+  };
+
+  // Handle date/time selection and update URL
+  const handleDateSelect = (date: Date | null, slot: any = null) => {
+    useAppointmentStore.getState().setDate(date);
+    if (slot) {
+      useAppointmentStore.getState().setSlot(slot);
+    }
+    
+    let dateStr = null;
+    let timeStr = null;
+    
+    if (date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      dateStr = `${year}-${month}-${day}`;
+    }
+    
+    if (slot) {
+      timeStr = slot.startTime;
+    }
+    
+    updateUrlParams({ 
+      date: dateStr,
+      time: timeStr,
+      step: slot ? '5' : null
+    });
+    
+    if (slot) {
+      setCurrentStep(5);
     }
   };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      handleStepChange(currentStep - 1);
+    } else {
+      // On step 1, redirect to home
+      router.push('/');
     }
   };
 
   const handleSubmit = async () => {
+    if (!isAuthenticated) {
+      // Show login modal instead of submitting
+      setPendingBooking(true);
+      setShowLoginModal(true);
+      return;
+    }
+
     if (
       !selectedBranch ||
       !selectedService ||
@@ -202,13 +330,12 @@ export function BookingWizard() {
 
     setIsSubmitting(true);
     try {
-      // Format date as YYYY-MM-DD in LOCAL timezone
       const year = selectedDate.getFullYear();
       const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
       
-      await appointmentsApi.create({
+      const response = await appointmentsApi.create({
         branchId: selectedBranch.id,
         doctorId: selectedDoctor.id,
         serviceId: selectedService.id,
@@ -217,8 +344,31 @@ export function BookingWizard() {
         notes,
       });
 
+      // Get calendar status from response
+      const calendarEventCreated = response.data?.calendarEventCreated;
+      const calendarError = response.data?.calendarError;
+
+      // Main success toast
       addToast("Appointment booked successfully!", "success");
+
+      // Handle calendar event creation status
+      if (calendarEventCreated === true) {
+        // Calendar event created successfully with reminder
+        addToast("Google Calendar event created with 1-hour reminder!", "success");
+      } else if (calendarEventCreated === 'sync_disabled') {
+        // Calendar connected but sync is disabled
+        addToast("Connect Google Calendar in your profile to get appointment reminders!", "info");
+      } else if (calendarEventCreated === 'not_connected') {
+        // Calendar not connected
+        addToast("Link Google Calendar in your profile to get appointment reminders!", "info");
+      } else if (calendarEventCreated === false || calendarError) {
+        // Failed to create calendar event
+        addToast("Failed to create Google Calendar event. You can still view your appointment in the app.", "warning");
+      }
+
       reset();
+      // Clear URL params
+      router.replace("/book");
       router.push("/medical-history");
     } catch (error: any) {
       addToast(
@@ -227,6 +377,17 @@ export function BookingWizard() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle successful login
+  const handleLoginSuccess = () => {
+    setShowLoginModal(false);
+    checkAuth();
+    // Retry booking after login
+    if (pendingBooking) {
+      handleSubmit();
+      setPendingBooking(false);
     }
   };
 
@@ -285,16 +446,37 @@ export function BookingWizard() {
       {/* Step Content */}
       <Card className='min-h-[400px]'>
         {currentStep === 1 && (
-          <StepBranch branches={branches} isLoading={isLoading} />
+          <StepBranch 
+            branches={branches} 
+            isLoading={isLoading} 
+            onSelect={handleBranchSelect}
+            selectedId={selectedBranch?.id}
+          />
         )}
         {currentStep === 2 && (
-          <StepService services={services} isLoading={isLoading} />
+          <StepService 
+            services={services} 
+            isLoading={isLoading}
+            onSelect={handleServiceSelect}
+            selectedId={selectedService?.id}
+          />
         )}
         {currentStep === 3 && (
-          <StepDoctor doctors={doctors} isLoading={isLoading} />
+          <StepDoctor 
+            doctors={doctors} 
+            isLoading={isLoading}
+            onSelect={handleDoctorSelect}
+            selectedId={selectedDoctor?.id}
+          />
         )}
         {currentStep === 4 && (
-          <StepDateTime availableSlots={availableSlots} isLoading={isLoading} />
+          <StepDateTime 
+            availableSlots={availableSlots} 
+            isLoading={isLoading}
+            onSelect={handleDateSelect}
+            selectedDate={selectedDate}
+            selectedSlot={selectedSlot}
+          />
         )}
         {currentStep === 5 && (
           <StepConfirm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
@@ -306,13 +488,12 @@ export function BookingWizard() {
         <Button
           variant='outline'
           onClick={handleBack}
-          disabled={currentStep === 1}
         >
-          Back
+          {currentStep === 1 ? 'Back to Home' : 'Back'}
         </Button>
 
         {currentStep < steps.length ? (
-          <Button onClick={handleNext} disabled={!canProceed() || isLoading}>
+          <Button onClick={() => handleStepChange(currentStep + 1)} disabled={!canProceed() || isLoading}>
             Next
           </Button>
         ) : (
@@ -321,10 +502,20 @@ export function BookingWizard() {
             disabled={isSubmitting}
             isLoading={isSubmitting}
           >
-            Confirm Booking
+            {isAuthenticated ? "Confirm Booking" : "Login to Book"}
           </Button>
         )}
       </div>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => {
+          setShowLoginModal(false);
+          setPendingBooking(false);
+        }}
+        onSuccess={handleLoginSuccess}
+      />
     </div>
   );
 }

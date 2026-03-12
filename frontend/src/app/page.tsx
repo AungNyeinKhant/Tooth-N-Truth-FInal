@@ -16,7 +16,7 @@ export default function Home() {
     setIsAuthenticated(!!token);
   }, []);
 
-  const bookHref = isAuthenticated ? '/book' : '/login';
+  const bookHref = '/book';
 
   return (
     <div className="flex flex-col font-sans">

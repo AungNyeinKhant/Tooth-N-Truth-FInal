@@ -31,6 +31,9 @@ function CallbackContent() {
           console.log('[OAuth Callback] User loaded:', currentUser);
           console.log('[OAuth Callback] Role:', userRole);
           
+          // Check if there's a stored booking redirect URL
+          const bookingRedirect = sessionStorage.getItem('bookingRedirect');
+          
           // If opened as popup (for account linking), send message to opener
           if (isPopup && window.opener) {
             window.opener.postMessage({ type: 'googleOAuthSuccess' }, '*');
@@ -38,6 +41,11 @@ function CallbackContent() {
             setTimeout(() => {
               window.close();
             }, 1000);
+          } else if (bookingRedirect) {
+            // Clear the stored redirect
+            sessionStorage.removeItem('bookingRedirect');
+            // Redirect back to booking page with all selections preserved
+            router.replace(bookingRedirect);
           } else {
             // Redirect based on role
             if (userRole === 'PATIENT') router.replace('/patient/dashboard');

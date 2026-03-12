@@ -1,25 +1,29 @@
 "use client";
 
-import { useAppointmentStore } from "@/stores";
 import { Card } from "@/components/ui";
 import { User } from "lucide-react";
+
+interface Doctor {
+  id: string;
+  firstName: string;
+  lastName: string;
+  specialization: string;
+  bio?: string;
+}
+
+interface StepDoctorProps {
+  doctors: Doctor[];
+  isLoading: boolean;
+  onSelect: (doctor: Doctor) => void;
+  selectedId?: string;
+}
 
 export default function StepDoctor({
   doctors,
   isLoading,
-}: {
-  doctors: Array<{
-    id: string;
-    firstName: string;
-    lastName: string;
-    specialization: string;
-    bio?: string;
-  }>;
-  isLoading: boolean;
-}) {
-  // Read directly from store instead of props
-  const { selectedDoctor, setDoctor } = useAppointmentStore();
-
+  onSelect,
+  selectedId,
+}: StepDoctorProps) {
   if (isLoading) {
     return (
       <div className='flex items-center justify-center h-64'>
@@ -48,11 +52,11 @@ export default function StepDoctor({
             key={doctor.id}
             hover
             className={`cursor-pointer transition-all ${
-              selectedDoctor?.id === doctor.id
+              selectedId === doctor.id
                 ? "ring-2 ring-primary-cyan border-primary-cyan"
                 : ""
             }`}
-            onClick={() => setDoctor(doctor)}
+            onClick={() => onSelect(doctor)}
           >
             <div className='flex items-start gap-4'>
               <div className='w-12 h-12 rounded-full bg-primary-cyan/10 flex items-center justify-center flex-shrink-0'>

@@ -1,26 +1,22 @@
 "use client";
 
-import { useAppointmentStore } from "@/stores";
 import { MapPin, Phone } from "lucide-react";
 
-interface StepBranchProps {
-  branches: Array<{
-    id: string;
-    name: string;
-    address: string;
-    phone: string;
-  }>;
-  isLoading: boolean;
+interface Branch {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
 }
 
-export default function StepBranch({ branches, isLoading }: StepBranchProps) {
-  const { selectedBranch, setBranch } = useAppointmentStore();
+interface StepBranchProps {
+  branches: Branch[];
+  isLoading: boolean;
+  onSelect: (branch: Branch) => void;
+  selectedId?: string;
+}
 
-  // Debug: log what we receive as props
-  console.log("[StepBranch] PROPS branches:", branches);
-  console.log("[StepBranch] PROPS isLoading:", isLoading);
-  console.log("[StepBranch] PROPS branches.length:", branches?.length);
-
+export default function StepBranch({ branches, isLoading, onSelect, selectedId }: StepBranchProps) {
   if (isLoading) {
     return (
       <div className='flex items-center justify-center h-64'>
@@ -29,19 +25,10 @@ export default function StepBranch({ branches, isLoading }: StepBranchProps) {
     );
   }
 
-  // Debug: if branches is empty, show what's happening
   if (!branches || branches.length === 0) {
-    console.log(
-      "[StepBranch] branches is empty! Type:",
-      typeof branches,
-      Array.isArray(branches),
-    );
     return (
       <div className='flex flex-col items-center justify-center h-64 text-center'>
         <p className='text-gray-500 mb-2'>No branches available</p>
-        <p className='text-sm text-gray-400'>
-          branches type: {typeof branches}, isArray: {Array.isArray(branches)}
-        </p>
       </div>
     );
   }
@@ -49,18 +36,18 @@ export default function StepBranch({ branches, isLoading }: StepBranchProps) {
   return (
     <div>
       <h2 className='text-2xl font-bold text-[#1A2332] mb-6'>
-        Select a Branch - {branches.length} found
+        Select a Branch
       </h2>
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         {branches.map((branch) => (
           <div
             key={branch.id}
-            onClick={() => setBranch(branch)}
+            onClick={() => onSelect(branch)}
             className={`
               bg-white rounded-xl shadow-md p-6 cursor-pointer transition-all
               hover:shadow-lg border-2
               ${
-                selectedBranch?.id === branch.id
+                selectedId === branch.id
                   ? "border-[#00BCD4] ring-2 ring-[#00BCD4]"
                   : "border-transparent hover:border-gray-200"
               }

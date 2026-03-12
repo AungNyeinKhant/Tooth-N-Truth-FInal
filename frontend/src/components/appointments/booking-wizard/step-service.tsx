@@ -1,23 +1,24 @@
 "use client";
 
-import { useAppointmentStore } from "@/stores";
 import { Card } from "@/components/ui";
 import { Clock } from "lucide-react";
 
-interface StepServiceProps {
-  services: Array<{
-    id: string;
-    name: string;
-    description: string;
-    duration: number;
-    price: number;
-  }>;
-  isLoading: boolean;
+interface Service {
+  id: string;
+  name: string;
+  description: string;
+  duration: number;
+  price: number;
 }
 
-export default function StepService({ services, isLoading }: StepServiceProps) {
-  const { selectedService, setService } = useAppointmentStore();
+interface StepServiceProps {
+  services: Service[];
+  isLoading: boolean;
+  onSelect: (service: Service) => void;
+  selectedId?: string;
+}
 
+export default function StepService({ services, isLoading, onSelect, selectedId }: StepServiceProps) {
   if (isLoading) {
     return (
       <div className='flex items-center justify-center h-64'>
@@ -37,11 +38,11 @@ export default function StepService({ services, isLoading }: StepServiceProps) {
             key={service.id}
             hover
             className={`cursor-pointer transition-all ${
-              selectedService?.id === service.id
+              selectedId === service.id
                 ? "ring-2 ring-primary-cyan border-primary-cyan"
                 : ""
             }`}
-            onClick={() => setService(service)}
+            onClick={() => onSelect(service)}
           >
             <div className='flex justify-between items-start'>
               <div>

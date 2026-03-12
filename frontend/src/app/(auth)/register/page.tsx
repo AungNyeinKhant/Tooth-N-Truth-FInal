@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Input, Card, ImageUpload } from '@/components/ui';
 import { useAuthStore, useUIStore } from '@/stores';
-import { Mail, Lock, User, Phone } from 'lucide-react';
+import { Mail, Lock, User, Phone, ArrowLeft } from 'lucide-react';
 import { API_BASE_URL, API_ENDPOINTS } from '@/lib/constants/api';
 import apiClient from '@/lib/api/axios-instance';
 
@@ -78,7 +78,15 @@ export default function RegisterPage() {
       });
       
       addToast('Registration successful! Welcome to Tooth & Truth.', 'success');
-      router.push('/dashboard');
+      
+      // Check if there's a stored booking redirect URL
+      const bookingRedirect = sessionStorage.getItem('bookingRedirect');
+      if (bookingRedirect) {
+        sessionStorage.removeItem('bookingRedirect');
+        router.push(bookingRedirect);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (error) {
       // Error is handled by the store
     }
@@ -87,6 +95,12 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background-light py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
+        {/* Back to Home Button */}
+        <Link href="/" className="inline-flex items-center text-sm text-gray-500 hover:text-primary-cyan mb-4">
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          Back to Home
+        </Link>
+
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-text-navy">Create Account</h1>
           <p className="mt-2 text-text-gray">
@@ -199,6 +213,10 @@ export default function RegisterPage() {
           <div className="mt-6">
             <a
               href={`${API_BASE_URL}${API_ENDPOINTS.AUTH.GOOGLE}`}
+              onClick={() => {
+                // Store current URL for redirect after Google signup
+                sessionStorage.setItem('bookingRedirect', window.location.href);
+              }}
               className="w-full flex justify-center items-center gap-3 px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               <GoogleIcon className="w-5 h-5" />

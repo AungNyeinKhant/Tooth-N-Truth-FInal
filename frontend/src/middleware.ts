@@ -84,8 +84,14 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 2. Home page (/) - ALWAYS PUBLIC
-  if (pathname === '/') {
+  // 2. Public pages - ALWAYS PUBLIC (no auth required)
+  const isPublicPage = 
+    pathname === '/' || 
+    pathname === '/book' || 
+    pathname === '/about' || 
+    pathname === '/services';
+  
+  if (isPublicPage) {
     return NextResponse.next();
   }
 

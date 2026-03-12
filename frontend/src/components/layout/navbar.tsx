@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui';
 import { useAuthStore, useUIStore } from '@/stores';
-import { Menu, User, LogOut, LayoutDashboard } from 'lucide-react';
+import { Menu, User, LogOut, LayoutDashboard, Home, X, Calendar } from 'lucide-react';
 
 /** Inline SVG logo — no external file dependency */
 function TnTLogo({ size = 40 }: { size?: number }) {
@@ -35,7 +35,7 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, isAuthenticated, getRedirectPath } = useAuthStore();
-  const { toggleSidebar } = useUIStore();
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const isAuthPage = pathname === '/login' || pathname === '/register';
 
@@ -44,41 +44,64 @@ export function Navbar() {
     router.push('/login');
   };
 
+  const navLinks = [
+    { href: '/', label: 'Home', icon: Home },
+    { href: '/about', label: 'About', icon: null },
+    { href: '/services', label: 'Services', icon: null },
+    { href: '/book', label: 'Book Now', icon: Calendar, isPrimary: true },
+  ];
+
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/';
+    return pathname.startsWith(href);
+  };
+
   if (isAuthPage) return null;
 
   return (
-    <nav className="sticky top-0 z-40 bg-white border-b border-gray-200">
+    <nav className="sticky top-0 z-50 bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Left side */}
           <div className="flex items-center">
-            {isAuthenticated && (
-              <button
-                onClick={toggleSidebar}
-                className="p-2 rounded-lg hover:bg-gray-100 mr-4 lg:hidden"
-              >
-                <Menu className="w-6 h-6 text-text-navy" />
-              </button>
-            )}
             <Link href="/" className="flex items-center gap-2 group">
-              <TnTLogo size={40} />
-              <span className="text-xl font-bold text-text-navy group-hover:text-primary-cyan transition-colors">
+              <TnTLogo size={36} />
+              <span className="hidden sm:block text-lg font-bold text-text-navy group-hover:text-primary-cyan transition-colors">
                 Tooth<span className="text-primary-orange">&</span>Truth
               </span>
             </Link>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-4">
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-1">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  link.isPrimary
+                    ? 'bg-[#FF6B35] text-white hover:bg-[#e85e2a]'
+                    : isActive(link.href)
+                    ? 'text-primary-cyan bg-primary-cyan/10'
+                    : 'text-text-navy hover:text-primary-cyan hover:bg-gray-50'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Desktop Auth Section */}
+          <div className="hidden md:flex items-center gap-2">
             {isAuthenticated ? (
               <>
-                <span className="hidden md:block text-sm text-text-gray">
-                  Welcome, {user?.firstName || user?.email?.split('@')[0] || 'Guest'}
+                <span className="text-sm text-text-gray mr-2">
+                  {user?.firstName || user?.email?.split('@')[0] || 'Guest'}
                 </span>
                 <div className="relative group">
                   <button className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100">
                     <div className="w-8 h-8 rounded-full bg-primary-cyan flex items-center justify-center text-white font-medium">
-                      {user?.firstName?.[0]}
+                      {user?.firstName?.[0] || 'U'}
                     </div>
                   </button>
                   {/* Dropdown */}
@@ -110,16 +133,108 @@ export function Navbar() {
             ) : (
               <>
                 <Link href="/login">
-                  <Button variant="ghost">Login</Button>
+                  <Button variant="ghost" size="sm">Login</Button>
                 </Link>
                 <Link href="/register">
-                  <Button>Register</Button>
+                  <Button size="sm">Register</Button>
                 </Link>
               </>
             )}
           </div>
+
+          {/* Mobile Menu Button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 rounded-lg hover:bg-gray-100"
+          >
+            {mobileMenuOpen ? (
+              <X className="w-6 h-6 text-text-navy" />
+            ) : (
+              <Menu className="w-6 h-6 text-text-navy" />
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden border-t border-gray-200 bg-white">
+          <div className="px-4 py-4 space-y-2">
+            {/* Mobile Nav Links */}
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  link.isPrimary
+                    ? 'bg-[#FF6B35] text-white'
+                    : isActive(link.href)
+                    ? 'text-primary-cyan bg-primary-cyan/10'
+                    : 'text-text-navy hover:bg-gray-50'
+                }`}
+              >
+                {link.icon && <link.icon className="w-5 h-5" />}
+                {link.label}
+              </Link>
+            ))}
+
+            {/* Mobile Auth Section */}
+            <div className="pt-4 border-t border-gray-200">
+              {isAuthenticated ? (
+                <div className="space-y-2">
+                  <div className="px-4 py-2 text-sm text-text-gray">
+                    Welcome, {user?.firstName || user?.email?.split('@')[0]}
+                  </div>
+                  <Link
+                    href={getRedirectPath()}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-text-navy hover:bg-gray-50 rounded-lg"
+                  >
+                    <LayoutDashboard className="w-5 h-5" />
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-text-navy hover:bg-gray-50 rounded-lg"
+                  >
+                    <User className="w-5 h-5" />
+                    Profile
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-status-error hover:bg-red-50 rounded-lg"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center px-4 py-3 text-sm font-medium text-text-navy border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    href="/register"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center px-4 py-3 text-sm font-medium text-white bg-primary-cyan rounded-lg hover:bg-primary-cyan/90"
+                  >
+                    Register
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
