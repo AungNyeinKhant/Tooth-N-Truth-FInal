@@ -85,8 +85,6 @@ export function BookingWizard() {
 
   // Load branches, services, and set URL params
   useEffect(() => {
-    console.log('[Booking] ===== LOAD INITIAL DATA =====');
-    
     const urlParams = new URLSearchParams(window.location.search);
     const branchId = urlParams.get("branch");
     const serviceId = urlParams.get("service");
@@ -94,8 +92,6 @@ export function BookingWizard() {
     const dateStr = urlParams.get("date");
     const time = urlParams.get("time");
     const step = urlParams.get("step");
-
-    console.log('[Booking] URL PARAMS:', { branchId, serviceId, doctorId, dateStr, time, step });
 
     if (step) {
       setCurrentStep(parseInt(step, 10));
@@ -112,8 +108,6 @@ export function BookingWizard() {
         const branchesList = extractList(branchesRes);
         const servicesList = extractList(servicesRes);
 
-        console.log('[Booking] Branches:', branchesList.length, 'Services:', servicesList.length);
-
         setBranches(branchesList);
         setServices(servicesList);
 
@@ -121,7 +115,6 @@ export function BookingWizard() {
         if (branchId) {
           const branch = branchesList.find((b: any) => b.id === branchId);
           if (branch) {
-            console.log('[Booking] ✓ Branch found:', branch.name);
             setBranch(branch);
           }
         }
@@ -130,7 +123,6 @@ export function BookingWizard() {
         if (serviceId) {
           const service = servicesList.find((s: any) => s.id === serviceId);
           if (service) {
-            console.log('[Booking] ✓ Service found:', service.name);
             setService(service);
           }
         }
@@ -138,16 +130,11 @@ export function BookingWizard() {
         // Set date from URL
         if (dateStr) {
           const date = new Date(dateStr + 'T00:00:00');
-          console.log('[Booking] Parsing date:', dateStr, '→', date, 'isValid:', !isNaN(date.getTime()));
           if (!isNaN(date.getTime())) {
-            console.log('[Booking] ✓ Setting date:', date);
             setDate(date);
           }
         }
-
-        console.log('[Booking] Initial data load complete');
       } catch (error) {
-        console.error('[Booking] Failed to load data:', error);
         addToast("Failed to load data", "error");
       } finally {
         setLoading(false);
@@ -159,39 +146,27 @@ export function BookingWizard() {
 
   // Load doctors when branch is selected
   useEffect(() => {
-    console.log('[Booking] ===== DOCTORS EFFECT =====');
-    console.log('[Booking] selectedBranch:', selectedBranch?.name, selectedBranch?.id);
-    
     if (selectedBranch) {
       const loadDoctors = async () => {
         setLoading(true);
-        console.log('[Booking] Loading doctors for branch:', selectedBranch.id);
         
         // Get doctorId from URL using window.location
         const urlParams = new URLSearchParams(window.location.search);
         const doctorId = urlParams.get("doctor");
-        console.log('[Booking] Doctor ID from URL:', doctorId);
         
         try {
           const res = await doctorsApi.getAll({ branchId: selectedBranch.id });
           const doctorsList = extractList(res);
-          console.log('[Booking] Doctors loaded:', doctorsList.length);
           setDoctors(Array.isArray(doctorsList) ? doctorsList : []);
 
           // Check if doctor is in URL
           if (doctorId) {
             const doctor = doctorsList.find((d: any) => d.id === doctorId);
             if (doctor) {
-              console.log('[Booking] ✓ Setting doctor from URL:', doctor.firstName, doctor.lastName);
               setDoctor(doctor);
-            } else {
-              console.log('[Booking] ✗ Doctor not found for ID:', doctorId);
             }
-          } else {
-            console.log('[Booking] No doctor ID in URL');
           }
         } catch (error) {
-          console.error("Failed to load doctors:", error);
           addToast("Failed to load doctors", "error");
           setDoctors([]);
         } finally {
@@ -205,11 +180,6 @@ export function BookingWizard() {
 
   // Load available slots when date is selected
   useEffect(() => {
-    console.log('[Booking] ===== SLOTS EFFECT =====');
-    console.log('[Booking] selectedDoctor:', selectedDoctor?.firstName, selectedDoctor?.id);
-    console.log('[Booking] selectedDate:', selectedDate);
-    console.log('[Booking] selectedService:', selectedService?.name, selectedService?.id);
-    
     if (selectedDoctor && selectedDate && selectedService) {
       const loadSlots = async () => {
         setLoading(true);
@@ -218,12 +188,6 @@ export function BookingWizard() {
           const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
           const day = String(selectedDate.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}`;
-          
-          console.log('[Booking] Loading slots for:', { 
-            doctorId: selectedDoctor.id, 
-            date: dateStr, 
-            serviceId: selectedService.id 
-          });
           
           const res = await doctorsApi.getAvailableSlots(
             selectedDoctor.id,
@@ -241,33 +205,22 @@ export function BookingWizard() {
             slotsData = slotsData.data;
           }
           
-          console.log('[Booking] Slots loaded:', slotsData.length, 'slots');
-          console.log('[Booking] Slot times:', slotsData.map((s: any) => s.startTime));
-          
           setAvailableSlots(Array.isArray(slotsData) ? slotsData : []);
 
           // Get time from URL using window.location
           const urlParams = new URLSearchParams(window.location.search);
           const timeFromUrl = urlParams.get("time");
-          console.log('[Booking] Time from URL:', timeFromUrl);
           
           if (timeFromUrl) {
             // Decode the time if needed (URL encoding)
             const decodedTime = decodeURIComponent(timeFromUrl);
-            console.log('[Booking] Decoded time:', decodedTime);
             
             const slot = slotsData.find((s: any) => s.startTime === decodedTime);
             if (slot) {
-              console.log('[Booking] ✓ Setting slot from URL:', slot);
-              setSlot(slot);  // Use the hook function
-            } else {
-              console.log('[Booking] ✗ Slot not found for time:', decodedTime);
+              setSlot(slot);
             }
-          } else {
-            console.log('[Booking] No time in URL');
           }
         } catch (error) {
-          console.error("Failed to load available slots:", error);
           addToast("Failed to load available slots", "error");
           setAvailableSlots([]);
         } finally {

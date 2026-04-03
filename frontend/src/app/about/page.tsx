@@ -1,9 +1,57 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { MapPin, Phone, Mail, Clock, Star, Award, Heart, Shield, Users } from 'lucide-react';
 import Link from 'next/link';
+import { branchesApi } from '@/lib/api';
+
+interface Branch {
+  id: string;
+  name: string;
+  address: string;
+  phone?: string;
+  isActive: boolean;
+}
 
 export default function AboutPage() {
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const response = await branchesApi.getAll({ status: 'active', limit: 100 });
+        
+        // Extract branches from response
+        const responseData = response.data as any;
+        let branchesData: Branch[] = [];
+        
+        // Try multiple extraction patterns
+        if (Array.isArray(responseData)) {
+          branchesData = responseData;
+        } else if (responseData?.data && Array.isArray(responseData.data)) {
+          branchesData = responseData.data;
+        } else if (responseData?.data?.data && Array.isArray(responseData.data.data)) {
+          branchesData = responseData.data.data;
+        } else if (responseData?.branches && Array.isArray(responseData.branches)) {
+          branchesData = responseData.branches;
+        }
+        
+        // Filter active branches (keep if isActive is true or undefined)
+        const activeBranches = branchesData.filter((b: any) => b.isActive !== false);
+        
+        setBranches(activeBranches);
+      } catch (error) {
+        console.error('Failed to fetch branches:', error);
+        setBranches([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBranches();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
       {/* Hero Section */}
@@ -133,24 +181,52 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-[#1A2332] mb-4">Our Locations</h2>
-            <p className="text-gray-600">Find us at 5 convenient locations across Yangon</p>
+            {isLoading ? (
+              <p className="text-gray-600">Loading locations...</p>
+            ) : (
+              <p className="text-gray-600">
+                Find us at {branches.length} convenient {branches.length === 1 ? 'location' : 'locations'} across Yangon
+              </p>
+            )}
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { name: 'South Okkalapa', address: 'No. 123, Main Road, South Okkalapa' },
-              { name: 'Downtown', address: 'No. 456, Sule Pagoda Road, Downtown' },
-              { name: 'Hlaing', address: 'No. 789, Hlaing Township' },
-            ].map((branch, index) => (
-              <div key={index} className="bg-white rounded-xl p-6 shadow-md">
-                <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-[#00BCD4] mt-1" />
-                  <div>
-                    <h4 className="font-bold text-[#1A2332]">{branch.name}</h4>
-                    <p className="text-sm text-gray-600">{branch.address}</p>
+            {isLoading ? (
+              // Loading skeletons
+              [1, 2, 3].map((i) => (
+                <div key={i} className="bg-white rounded-xl p-6 shadow-md animate-pulse">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 bg-gray-200 rounded" />
+                    <div className="flex-1">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-gray-200 rounded w-full" />
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : branches.length > 0 ? (
+              branches.map((branch) => (
+                <div key={branch.id} className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="w-5 h-5 text-[#00BCD4] mt-1" />
+                    <div>
+                      <h4 className="font-bold text-[#1A2332]">{branch.name}</h4>
+                      <p className="text-sm text-gray-600">{branch.address}</p>
+                      {branch.phone && (
+                        <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                          <Phone className="w-4 h-4" />
+                          <span>{branch.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-3 text-center py-8 text-gray-500">
+                <MapPin className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No locations available at the moment</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </section>
