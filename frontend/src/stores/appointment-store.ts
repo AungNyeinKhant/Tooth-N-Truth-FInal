@@ -84,26 +84,26 @@ export const useAppointmentStore = create<AppointmentState>((set) => ({
     set({
       selectedBranch: branch,
       selectedDoctor: null,
-      selectedDate: null,
-      selectedSlot: null,
+      // Don't reset selectedDate here - we need it from URL!
+      // selectedSlot: null,
       doctors: [],
-      availableSlots: [],
+      // availableSlots: [],
     }),
 
   setService: (service) =>
     set({
       selectedService: service,
-      selectedDate: null,
-      selectedSlot: null,
-      availableSlots: [],
+      // Don't reset selectedDate here - we need it from URL!
+      // selectedSlot: null,
+      // availableSlots: [],
     }),
 
   setDoctor: (doctor) =>
     set({
       selectedDoctor: doctor,
-      selectedDate: null,
-      selectedSlot: null,
-      availableSlots: [],
+      // Don't reset selectedDate here - we need it from URL!
+      // selectedSlot: null,
+      // availableSlots: [],
     }),
 
   setDate: (date) =>

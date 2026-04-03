@@ -65,6 +65,8 @@ export function BookingWizard() {
     setBranch,
     setService,
     setDoctor,
+    setDate,
+    setSlot,
     reset,
   } = useAppointmentStore();
 
@@ -81,21 +83,25 @@ export function BookingWizard() {
     router.replace(url.toString(), { scroll: false });
   }, [router]);
 
-  // Load state from URL params on mount
+  // Load branches, services, and set URL params
   useEffect(() => {
-    const branchId = searchParams.get("branch");
-    const serviceId = searchParams.get("service");
-    const doctorId = searchParams.get("doctor");
-    const dateStr = searchParams.get("date");
-    const time = searchParams.get("time");
-    const step = searchParams.get("step");
+    console.log('[Booking] ===== LOAD INITIAL DATA =====');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const branchId = urlParams.get("branch");
+    const serviceId = urlParams.get("service");
+    const doctorId = urlParams.get("doctor");
+    const dateStr = urlParams.get("date");
+    const time = urlParams.get("time");
+    const step = urlParams.get("step");
+
+    console.log('[Booking] URL PARAMS:', { branchId, serviceId, doctorId, dateStr, time, step });
 
     if (step) {
       setCurrentStep(parseInt(step, 10));
     }
 
-    // Load initial data first
-    const loadInitialData = async () => {
+    const loadData = async () => {
       setLoading(true);
       try {
         const [branchesRes, servicesRes] = await Promise.all([
@@ -106,59 +112,83 @@ export function BookingWizard() {
         const branchesList = extractList(branchesRes);
         const servicesList = extractList(servicesRes);
 
-        setBranches(Array.isArray(branchesList) ? branchesList : []);
-        setServices(Array.isArray(servicesList) ? servicesList : []);
+        console.log('[Booking] Branches:', branchesList.length, 'Services:', servicesList.length);
 
-        // Find and set branch from URL
+        setBranches(branchesList);
+        setServices(servicesList);
+
+        // Set branch from URL
         if (branchId) {
           const branch = branchesList.find((b: any) => b.id === branchId);
           if (branch) {
-            console.log('[Booking] Setting branch from URL:', branch);
+            console.log('[Booking] ✓ Branch found:', branch.name);
             setBranch(branch);
           }
         }
 
-        // Find and set service from URL
+        // Set service from URL
         if (serviceId) {
           const service = servicesList.find((s: any) => s.id === serviceId);
           if (service) {
-            console.log('[Booking] Setting service from URL:', service);
+            console.log('[Booking] ✓ Service found:', service.name);
             setService(service);
           }
         }
+
+        // Set date from URL
+        if (dateStr) {
+          const date = new Date(dateStr + 'T00:00:00');
+          console.log('[Booking] Parsing date:', dateStr, '→', date, 'isValid:', !isNaN(date.getTime()));
+          if (!isNaN(date.getTime())) {
+            console.log('[Booking] ✓ Setting date:', date);
+            setDate(date);
+          }
+        }
+
+        console.log('[Booking] Initial data load complete');
       } catch (error) {
-        console.error("Failed to load initial data:", error);
-        addToast("Failed to load initial data", "error");
+        console.error('[Booking] Failed to load data:', error);
+        addToast("Failed to load data", "error");
       } finally {
         setLoading(false);
       }
     };
 
-    loadInitialData();
+    loadData();
   }, []);
 
-  // Load doctors when branch is selected (from URL or store)
+  // Load doctors when branch is selected
   useEffect(() => {
-    console.log('[Booking] selectedBranch changed:', selectedBranch);
+    console.log('[Booking] ===== DOCTORS EFFECT =====');
+    console.log('[Booking] selectedBranch:', selectedBranch?.name, selectedBranch?.id);
+    
     if (selectedBranch) {
       const loadDoctors = async () => {
         setLoading(true);
         console.log('[Booking] Loading doctors for branch:', selectedBranch.id);
+        
+        // Get doctorId from URL using window.location
+        const urlParams = new URLSearchParams(window.location.search);
+        const doctorId = urlParams.get("doctor");
+        console.log('[Booking] Doctor ID from URL:', doctorId);
+        
         try {
           const res = await doctorsApi.getAll({ branchId: selectedBranch.id });
-          console.log('[Booking] Doctors API response:', res.data);
           const doctorsList = extractList(res);
-          console.log('[Booking] Extracted doctors list:', doctorsList);
+          console.log('[Booking] Doctors loaded:', doctorsList.length);
           setDoctors(Array.isArray(doctorsList) ? doctorsList : []);
 
           // Check if doctor is in URL
-          const doctorId = searchParams.get("doctor");
           if (doctorId) {
             const doctor = doctorsList.find((d: any) => d.id === doctorId);
             if (doctor) {
-              console.log('[Booking] Setting doctor from URL:', doctor);
+              console.log('[Booking] ✓ Setting doctor from URL:', doctor.firstName, doctor.lastName);
               setDoctor(doctor);
+            } else {
+              console.log('[Booking] ✗ Doctor not found for ID:', doctorId);
             }
+          } else {
+            console.log('[Booking] No doctor ID in URL');
           }
         } catch (error) {
           console.error("Failed to load doctors:", error);
@@ -175,6 +205,11 @@ export function BookingWizard() {
 
   // Load available slots when date is selected
   useEffect(() => {
+    console.log('[Booking] ===== SLOTS EFFECT =====');
+    console.log('[Booking] selectedDoctor:', selectedDoctor?.firstName, selectedDoctor?.id);
+    console.log('[Booking] selectedDate:', selectedDate);
+    console.log('[Booking] selectedService:', selectedService?.name, selectedService?.id);
+    
     if (selectedDoctor && selectedDate && selectedService) {
       const loadSlots = async () => {
         setLoading(true);
@@ -183,6 +218,12 @@ export function BookingWizard() {
           const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
           const day = String(selectedDate.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}`;
+          
+          console.log('[Booking] Loading slots for:', { 
+            doctorId: selectedDoctor.id, 
+            date: dateStr, 
+            serviceId: selectedService.id 
+          });
           
           const res = await doctorsApi.getAvailableSlots(
             selectedDoctor.id,
@@ -200,15 +241,30 @@ export function BookingWizard() {
             slotsData = slotsData.data;
           }
           
+          console.log('[Booking] Slots loaded:', slotsData.length, 'slots');
+          console.log('[Booking] Slot times:', slotsData.map((s: any) => s.startTime));
+          
           setAvailableSlots(Array.isArray(slotsData) ? slotsData : []);
 
-          // Check if time is in URL
-          const time = searchParams.get("time");
-          if (time) {
-            const slot = slotsData.find((s: any) => s.startTime === time);
+          // Get time from URL using window.location
+          const urlParams = new URLSearchParams(window.location.search);
+          const timeFromUrl = urlParams.get("time");
+          console.log('[Booking] Time from URL:', timeFromUrl);
+          
+          if (timeFromUrl) {
+            // Decode the time if needed (URL encoding)
+            const decodedTime = decodeURIComponent(timeFromUrl);
+            console.log('[Booking] Decoded time:', decodedTime);
+            
+            const slot = slotsData.find((s: any) => s.startTime === decodedTime);
             if (slot) {
-              useAppointmentStore.getState().setSlot(slot);
+              console.log('[Booking] ✓ Setting slot from URL:', slot);
+              setSlot(slot);  // Use the hook function
+            } else {
+              console.log('[Booking] ✗ Slot not found for time:', decodedTime);
             }
+          } else {
+            console.log('[Booking] No time in URL');
           }
         } catch (error) {
           console.error("Failed to load available slots:", error);
@@ -221,7 +277,7 @@ export function BookingWizard() {
 
       loadSlots();
     }
-  }, [selectedDoctor, selectedDate, selectedService]);
+  }, [selectedDoctor, selectedDate, selectedService, searchParams]);
 
   // Handle step change and update URL
   const handleStepChange = (newStep: number) => {
