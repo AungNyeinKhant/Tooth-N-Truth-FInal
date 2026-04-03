@@ -73,7 +73,8 @@ export default function AnalyticsPage() {
       if (!branchId) return;
       try {
         const res = await doctorsApi.getAll({ branchId, status: "active", limit: 100 });
-        const data = res.data?.data || res.data?.data?.data || [];
+        const resData = res.data as any;
+        const data = resData?.data || resData?.data?.data || [];
         setDoctors(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Error fetching doctors:", error);

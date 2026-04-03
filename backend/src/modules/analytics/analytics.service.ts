@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { AdminStatsDto, RevenueTrendDto, RevenueTrendResponseDto, BranchAppointmentDto, AppointmentsByBranchResponseDto, TopServiceDto, TopServicesResponseDto, PatientGrowthDto, PatientGrowthResponseDto } from './dto/admin-stats.dto';
+import { AdminStatsDto, AdminAnalyticsQueryDto, DetailedAdminStatsDto, RevenueTrendDto, RevenueTrendResponseDto, BranchAppointmentDto, AppointmentsByBranchResponseDto, TopServiceDto, TopServicesResponseDto, PatientGrowthDto, PatientGrowthResponseDto } from './dto/admin-stats.dto';
 import {
   DailyStatsDto,
   WeeklyStatsDto,
@@ -180,59 +180,177 @@ export class AnalyticsService {
   }
 
   /**
-   * Get revenue trend for last 12 months
+   * Get revenue trend for last 12 months (or custom date range)
    */
-  async getRevenueTrend(): Promise<RevenueTrendResponseDto> {
+  async getRevenueTrend(
+    startDate?: string,
+    endDate?: string,
+    branchId?: string,
+  ): Promise<RevenueTrendResponseDto> {
     const today = new Date();
     const data: RevenueTrendDto[] = [];
 
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59, 999);
+    // Build base where clause for branch filter
+    const branchWhere = branchId ? { branchId } : {};
+
+    // If custom date range provided, show monthly breakdown within that range
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const monthsDiff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
       
-      const appointments = await this.prisma.appointment.findMany({
-        where: {
-          appointmentDate: {
-            gte: monthDate,
-            lte: monthEnd,
+      // Show up to 12 months of data
+      const monthsToShow = Math.min(Math.max(monthsDiff + 1, 1), 12);
+      
+      for (let i = 0; i < monthsToShow; i++) {
+        const monthDate = new Date(start.getFullYear(), start.getMonth() + i, 1);
+        const monthEnd = new Date(start.getFullYear(), start.getMonth() + i + 1, 0, 23, 59, 59, 999);
+        
+        const appointments = await this.prisma.appointment.findMany({
+          where: {
+            ...branchWhere,
+            appointmentDate: {
+              gte: monthDate,
+              lte: monthEnd,
+            },
+            status: 'COMPLETED',
           },
-          status: 'COMPLETED',
-        },
-        include: { service: true },
-      });
+          include: { service: true },
+        });
 
-      const revenue = appointments.reduce((sum, a) => sum + (Number(a.service.price) || 0), 0);
-      const totalAppointments = await this.prisma.appointment.count({
-        where: {
-          appointmentDate: {
-            gte: monthDate,
-            lte: monthEnd,
+        const revenue = appointments.reduce((sum, a) => sum + (Number(a.service.price) || 0), 0);
+        const totalAppointments = await this.prisma.appointment.count({
+          where: {
+            ...branchWhere,
+            appointmentDate: {
+              gte: monthDate,
+              lte: monthEnd,
+            },
           },
-        },
-      });
+        });
 
-      data.push({
-        month: monthDate.toLocaleString('default', { month: 'short' }),
-        year: monthDate.getFullYear(),
-        revenue,
-        appointments: totalAppointments,
-      });
+        data.push({
+          month: monthDate.toLocaleString('default', { month: 'short' }),
+          year: monthDate.getFullYear(),
+          revenue,
+          appointments: totalAppointments,
+        });
+      }
+    } else {
+      // Default: last 12 months
+      for (let i = 11; i >= 0; i--) {
+        const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59, 999);
+        
+        const appointments = await this.prisma.appointment.findMany({
+          where: {
+            ...branchWhere,
+            appointmentDate: {
+              gte: monthDate,
+              lte: monthEnd,
+            },
+            status: 'COMPLETED',
+          },
+          include: { service: true },
+        });
+
+        const revenue = appointments.reduce((sum, a) => sum + (Number(a.service.price) || 0), 0);
+        const totalAppointments = await this.prisma.appointment.count({
+          where: {
+            ...branchWhere,
+            appointmentDate: {
+              gte: monthDate,
+              lte: monthEnd,
+            },
+          },
+        });
+
+        data.push({
+          month: monthDate.toLocaleString('default', { month: 'short' }),
+          year: monthDate.getFullYear(),
+          revenue,
+          appointments: totalAppointments,
+        });
+      }
     }
 
     const totalRevenue = data.reduce((sum, d) => sum + d.revenue, 0);
-    const avgMonthlyRevenue = Math.round(totalRevenue / 12);
+    const avgMonthlyRevenue = data.length > 0 ? Math.round(totalRevenue / data.length) : 0;
 
     return { data, totalRevenue, avgMonthlyRevenue };
   }
 
   /**
-   * Get appointments grouped by branch
+   * Get appointments grouped by branch (with optional date/branch filters)
    */
-  async getAppointmentsByBranch(): Promise<AppointmentsByBranchResponseDto> {
+  async getAppointmentsByBranch(
+    startDate?: string,
+    endDate?: string,
+    branchId?: string,
+  ): Promise<AppointmentsByBranchResponseDto> {
+    // Build date filter
+    const dateFilter: any = {};
+    if (startDate && endDate) {
+      dateFilter.appointmentDate = {
+        gte: new Date(startDate),
+        lte: new Date(endDate + 'T23:59:59.999Z'),
+      };
+    } else if (startDate) {
+      dateFilter.appointmentDate = {
+        gte: new Date(startDate),
+      };
+    } else if (endDate) {
+      dateFilter.appointmentDate = {
+        lte: new Date(endDate + 'T23:59:59.999Z'),
+      };
+    }
+
+    // If specific branch filter, return only that branch
+    if (branchId) {
+      const branch = await this.prisma.branch.findUnique({
+        where: { id: branchId },
+        include: {
+          appointments: {
+            where: dateFilter,
+            include: { service: true },
+          },
+        },
+      });
+
+      if (!branch) {
+        return { branches: [], totalAppointments: 0, topBranch: null };
+      }
+
+      const completed = branch.appointments.filter(a => a.status === 'COMPLETED').length;
+      const cancelled = branch.appointments.filter(a => a.status === 'CANCELLED').length;
+      const noShow = branch.appointments.filter(a => a.status === 'NO_SHOW').length;
+      const revenue = branch.appointments
+        .filter(a => a.status === 'COMPLETED')
+        .reduce((sum, a) => sum + (Number(a.service.price) || 0), 0);
+
+      const branchData: BranchAppointmentDto = {
+        branchId: branch.id,
+        branchName: branch.name,
+        totalAppointments: branch.appointments.length,
+        completed,
+        cancelled,
+        noShow,
+        revenue,
+      };
+
+      return {
+        branches: [branchData],
+        totalAppointments: branch.appointments.length,
+        topBranch: branchData,
+      };
+    }
+
+    // Get all branches with their appointments
     const branches = await this.prisma.branch.findMany({
       where: { isActive: true },
       include: {
         appointments: {
+          where: dateFilter,
           include: { service: true },
         },
       },
@@ -270,11 +388,30 @@ export class AnalyticsService {
   }
 
   /**
-   * Get top services by revenue
+   * Get top services by revenue (with optional date/branch filters)
    */
-  async getTopServices(limit: number = 10): Promise<TopServicesResponseDto> {
+  async getTopServices(
+    limit: number = 10,
+    startDate?: string,
+    endDate?: string,
+    branchId?: string,
+  ): Promise<TopServicesResponseDto> {
+    // Build where clause
+    const where: any = { status: 'COMPLETED' };
+    
+    if (startDate && endDate) {
+      where.appointmentDate = {
+        gte: new Date(startDate),
+        lte: new Date(endDate + 'T23:59:59.999Z'),
+      };
+    }
+    
+    if (branchId) {
+      where.branchId = branchId;
+    }
+
     const appointments = await this.prisma.appointment.findMany({
-      where: { status: 'COMPLETED' },
+      where,
       include: { service: true },
     });
 
@@ -305,34 +442,85 @@ export class AnalyticsService {
   }
 
   /**
-   * Get patient growth data for last 12 months
+   * Get patient growth data for last 12 months (or custom date range)
    */
-  async getPatientGrowth(): Promise<PatientGrowthResponseDto> {
+  async getPatientGrowth(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<PatientGrowthResponseDto> {
     const today = new Date();
     const data: PatientGrowthDto[] = [];
     let runningTotal = 0;
 
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59, 999);
-      
-      const newPatients = await this.prisma.patient.count({
+    // Get initial total patients before the range
+    let initialTotal = 0;
+    if (startDate) {
+      initialTotal = await this.prisma.patient.count({
         where: {
           createdAt: {
-            gte: monthDate,
-            lte: monthEnd,
+            lt: new Date(startDate),
           },
         },
       });
+    }
 
-      runningTotal += newPatients;
+    // If custom date range provided
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const monthsDiff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+      const monthsToShow = Math.min(Math.max(monthsDiff + 1, 1), 12);
+      
+      runningTotal = initialTotal;
+      
+      for (let i = 0; i < monthsToShow; i++) {
+        const monthDate = new Date(start.getFullYear(), start.getMonth() + i, 1);
+        const monthEnd = new Date(start.getFullYear(), start.getMonth() + i + 1, 0, 23, 59, 59, 999);
+        
+        const newPatients = await this.prisma.patient.count({
+          where: {
+            createdAt: {
+              gte: monthDate,
+              lte: monthEnd,
+            },
+          },
+        });
 
-      data.push({
-        month: monthDate.toLocaleString('default', { month: 'short' }),
-        year: monthDate.getFullYear(),
-        newPatients,
-        totalPatients: runningTotal,
-      });
+        runningTotal += newPatients;
+
+        data.push({
+          month: monthDate.toLocaleString('default', { month: 'short' }),
+          year: monthDate.getFullYear(),
+          newPatients,
+          totalPatients: runningTotal,
+        });
+      }
+    } else {
+      // Default: last 12 months
+      runningTotal = initialTotal;
+      
+      for (let i = 11; i >= 0; i--) {
+        const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59, 999);
+        
+        const newPatients = await this.prisma.patient.count({
+          where: {
+            createdAt: {
+              gte: monthDate,
+              lte: monthEnd,
+            },
+          },
+        });
+
+        runningTotal += newPatients;
+
+        data.push({
+          month: monthDate.toLocaleString('default', { month: 'short' }),
+          year: monthDate.getFullYear(),
+          newPatients,
+          totalPatients: runningTotal,
+        });
+      }
     }
 
     const totalNewPatients = data.reduce((sum, d) => sum + d.newPatients, 0);
@@ -343,6 +531,179 @@ export class AnalyticsService {
       : 0;
 
     return { data, totalNewPatients, growthRate };
+  }
+
+  /**
+   * Get detailed admin analytics with date range and branch filters
+   */
+  async getDetailedAnalytics(query: AdminAnalyticsQueryDto): Promise<DetailedAdminStatsDto> {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    
+    // Calculate date range based on period or explicit dates
+    let startDate: Date;
+    let endDate: Date = today;
+    
+    if (query.startDate && query.endDate) {
+      startDate = new Date(query.startDate);
+      endDate = new Date(query.endDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      // Default to this month based on period
+      switch (query.period) {
+        case 'today':
+          startDate = new Date(today);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(today);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case 'week':
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() - 7);
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case 'lastMonth':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          endDate = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+          break;
+        case 'last3Months':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+          break;
+        case 'last6Months':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 6, 1);
+          break;
+        case 'lastYear':
+          startDate = new Date(today.getFullYear() - 1, today.getMonth(), 1);
+          break;
+        case 'all':
+          startDate = new Date(2000, 0, 1); // Far back date
+          break;
+        case 'month':
+        default:
+          startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+          break;
+      }
+    }
+
+    // Calculate previous period for comparison
+    const periodLength = endDate.getTime() - startDate.getTime();
+    const prevStartDate = new Date(startDate.getTime() - periodLength - 1);
+    const prevEndDate = new Date(startDate.getTime() - 1);
+    prevEndDate.setHours(23, 59, 59, 999);
+
+    // Build where clause
+    const whereClause: any = {
+      appointmentDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+    if (query.branchId) {
+      whereClause.branchId = query.branchId;
+    }
+
+    const prevWhereClause: any = {
+      appointmentDate: {
+        gte: prevStartDate,
+        lte: prevEndDate,
+      },
+    };
+    if (query.branchId) {
+      prevWhereClause.branchId = query.branchId;
+    }
+
+    // Get current period data
+    const [appointments, prevAppointments, totalBranches, totalDoctors, totalPatients] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where: whereClause,
+        include: { service: true },
+      }),
+      this.prisma.appointment.findMany({
+        where: prevWhereClause,
+        include: { service: true },
+      }),
+      this.prisma.branch.count({ where: { isActive: true } }),
+      this.prisma.doctor.count({ where: { isActive: true } }),
+      this.prisma.patient.count(),
+    ]);
+
+    // Count appointments by status
+    const confirmed = appointments.filter(a => a.status === 'CONFIRMED').length;
+    const completed = appointments.filter(a => a.status === 'COMPLETED').length;
+    const cancelled = appointments.filter(a => a.status === 'CANCELLED').length;
+    const noShow = appointments.filter(a => a.status === 'NO_SHOW').length;
+    const totalAppointments = appointments.length;
+
+    // Calculate revenue
+    const totalRevenue = completed
+      ? appointments
+          .filter(a => a.status === 'COMPLETED')
+          .reduce((sum, a) => sum + (Number(a.service.price) || 0), 0)
+      : 0;
+
+    // Previous period data
+    const prevCompleted = prevAppointments.filter(a => a.status === 'COMPLETED').length;
+    const prevRevenue = prevCompleted
+      ? prevAppointments
+          .filter(a => a.status === 'COMPLETED')
+          .reduce((sum, a) => sum + (Number(a.service.price) || 0), 0)
+      : 0;
+
+    // Calculate rates
+    const completionRate = totalAppointments > 0
+      ? Math.round((completed / totalAppointments) * 100 * 10) / 10
+      : 0;
+    const cancellationRate = totalAppointments > 0
+      ? Math.round((cancelled / totalAppointments) * 100 * 10) / 10
+      : 0;
+    const noShowRate = totalAppointments > 0
+      ? Math.round((noShow / totalAppointments) * 100 * 10) / 10
+      : 0;
+    const attendanceRate = 100 - noShowRate - cancellationRate;
+
+    // Calculate averages
+    const avgRevenuePerAppointment = totalAppointments > 0
+      ? Math.round(totalRevenue / totalAppointments)
+      : 0;
+
+    // Comparisons
+    const revenueChange = totalRevenue - prevRevenue;
+    const revenueChangePercent = prevRevenue > 0
+      ? Math.round((revenueChange / prevRevenue) * 100 * 10) / 10
+      : totalRevenue > 0 ? 100 : 0;
+
+    const appointmentsChange = totalAppointments - prevAppointments.length;
+    const appointmentsChangePercent = prevAppointments.length > 0
+      ? Math.round((appointmentsChange / prevAppointments.length) * 100 * 10) / 10
+      : totalAppointments > 0 ? 100 : 0;
+
+    // Count unique branches with appointments
+    const uniqueBranchIds = new Set(appointments.map(a => a.branchId));
+    const branchesWithAppointments = uniqueBranchIds.size;
+
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      totalBranches,
+      totalDoctors,
+      totalPatients,
+      totalAppointments,
+      confirmed,
+      completed,
+      cancelled,
+      noShow,
+      totalRevenue,
+      avgRevenuePerAppointment,
+      completionRate,
+      cancellationRate,
+      noShowRate,
+      attendanceRate,
+      branchesWithAppointments,
+      revenueChange,
+      revenueChangePercent,
+      appointmentsChange,
+      appointmentsChangePercent,
+    };
   }
 
   // ==================== Branch Manager Analytics ====================

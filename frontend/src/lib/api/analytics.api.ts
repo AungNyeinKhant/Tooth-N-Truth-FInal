@@ -32,6 +32,33 @@ export interface AdminStats {
   patientsChangePercent: number;
 }
 
+// Detailed admin stats with filters
+export interface DetailedAdminStats {
+  startDate: string;
+  endDate: string;
+  totalBranches: number;
+  totalDoctors: number;
+  totalPatients: number;
+  totalAppointments: number;
+  confirmed: number;
+  completed: number;
+  cancelled: number;
+  noShow: number;
+  totalRevenue: number;
+  avgRevenuePerAppointment: number;
+  completionRate: number;
+  cancellationRate: number;
+  noShowRate: number;
+  attendanceRate: number;
+  branchesWithAppointments: number;
+  revenueChange: number;
+  revenueChangePercent: number;
+  appointmentsChange: number;
+  appointmentsChangePercent: number;
+}
+
+export type AnalyticsPeriod = 'today' | 'week' | 'month' | 'lastMonth' | 'last3Months' | 'last6Months' | 'lastYear' | 'all' | 'custom';
+
 export interface RevenueTrend {
   month: string;
   year: number;
@@ -148,12 +175,57 @@ export interface MonthlyStats {
 export const analyticsApi = {
   // Admin endpoints
   getAdminStats: () => apiClient.get<{ data: AdminStats }>(`${API_ENDPOINTS.ANALYTICS}/admin/stats`),
-  getRevenueTrend: () => apiClient.get<{ data: RevenueTrendResponse }>(`${API_ENDPOINTS.ANALYTICS}/admin/revenue-trend`),
-  getAppointmentsByBranch: () => apiClient.get<{ data: AppointmentsByBranchResponse }>(`${API_ENDPOINTS.ANALYTICS}/admin/appointments-by-branch`),
-  getTopServices: (limit?: number) => apiClient.get<{ data: TopServicesResponse }>(
-    `${API_ENDPOINTS.ANALYTICS}/admin/top-services${limit ? `?limit=${limit}` : ''}`
-  ),
-  getPatientGrowth: () => apiClient.get<{ data: PatientGrowthResponse }>(`${API_ENDPOINTS.ANALYTICS}/admin/patient-growth`),
+  getDetailedAnalytics: (params?: { startDate?: string; endDate?: string; branchId?: string; period?: AnalyticsPeriod }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.branchId) queryParams.append('branchId', params.branchId);
+    if (params?.period) queryParams.append('period', params.period);
+    const query = queryParams.toString();
+    return apiClient.get<{ data: DetailedAdminStats }>(
+      `${API_ENDPOINTS.ANALYTICS}/admin/detailed${query ? `?${query}` : ''}`
+    );
+  },
+  getRevenueTrend: (params?: { startDate?: string; endDate?: string; branchId?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.branchId) queryParams.append('branchId', params.branchId);
+    const query = queryParams.toString();
+    return apiClient.get<{ data: RevenueTrendResponse }>(
+      `${API_ENDPOINTS.ANALYTICS}/admin/revenue-trend${query ? `?${query}` : ''}`
+    );
+  },
+  getAppointmentsByBranch: (params?: { startDate?: string; endDate?: string; branchId?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.branchId) queryParams.append('branchId', params.branchId);
+    const query = queryParams.toString();
+    return apiClient.get<{ data: AppointmentsByBranchResponse }>(
+      `${API_ENDPOINTS.ANALYTICS}/admin/appointments-by-branch${query ? `?${query}` : ''}`
+    );
+  },
+  getTopServices: (limit?: number, params?: { startDate?: string; endDate?: string; branchId?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (limit) queryParams.append('limit', limit.toString());
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.branchId) queryParams.append('branchId', params.branchId);
+    const query = queryParams.toString();
+    return apiClient.get<{ data: TopServicesResponse }>(
+      `${API_ENDPOINTS.ANALYTICS}/admin/top-services${query ? `?${query}` : ''}`
+    );
+  },
+  getPatientGrowth: (params?: { startDate?: string; endDate?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    const query = queryParams.toString();
+    return apiClient.get<{ data: PatientGrowthResponse }>(
+      `${API_ENDPOINTS.ANALYTICS}/admin/patient-growth${query ? `?${query}` : ''}`
+    );
+  },
 
   // Branch manager endpoints
   getDailyStats: () => apiClient.get<{ data: DailyStats }>(`${API_ENDPOINTS.ANALYTICS}/branch/daily`),
