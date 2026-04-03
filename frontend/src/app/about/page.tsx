@@ -189,11 +189,11 @@ export default function AboutPage() {
               </p>
             )}
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="flex flex-wrap justify-center gap-6">
             {isLoading ? (
               // Loading skeletons
               [1, 2, 3].map((i) => (
-                <div key={i} className="bg-white rounded-xl p-6 shadow-md animate-pulse">
+                <div key={i} className="bg-white rounded-xl p-6 shadow-md animate-pulse w-full sm:w-[calc(50%-12px)] md:w-[calc(33.333%-16px)] max-w-sm">
                   <div className="flex items-start gap-3">
                     <div className="w-5 h-5 bg-gray-200 rounded" />
                     <div className="flex-1">
@@ -205,7 +205,7 @@ export default function AboutPage() {
               ))
             ) : branches.length > 0 ? (
               branches.map((branch) => (
-                <div key={branch.id} className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div key={branch.id} className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow w-full sm:w-[calc(50%-12px)] md:w-[calc(33.333%-16px)] max-w-sm">
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-[#00BCD4] mt-1" />
                     <div>
@@ -222,7 +222,7 @@ export default function AboutPage() {
                 </div>
               ))
             ) : (
-              <div className="col-span-3 text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-gray-500">
                 <MapPin className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                 <p>No locations available at the moment</p>
               </div>
