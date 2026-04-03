@@ -113,6 +113,36 @@ export interface WeeklyStats {
   }[];
 }
 
+export interface ServiceStats {
+  serviceId: string;
+  serviceName: string;
+  appointmentCount: number;
+  revenue: number;
+}
+
+export interface DoctorPerformance {
+  doctorId: string;
+  doctorFirstName: string;
+  doctorLastName: string;
+  specialization: string;
+  totalAppointments: number;
+  completedAppointments: number;
+  completionRate: number;
+  revenue: number;
+}
+
+export interface MonthlyStats {
+  startDate: string;
+  endDate: string;
+  totalAppointments: number;
+  totalRevenue: number;
+  completionRate: number;
+  noShowRate: number;
+  avgAppointmentsPerDay: number;
+  topServices: ServiceStats[];
+  doctorPerformance: DoctorPerformance[];
+}
+
 // ==================== API Methods ====================
 
 export const analyticsApi = {
@@ -128,4 +158,14 @@ export const analyticsApi = {
   // Branch manager endpoints
   getDailyStats: () => apiClient.get<{ data: DailyStats }>(`${API_ENDPOINTS.ANALYTICS}/branch/daily`),
   getWeeklyStats: () => apiClient.get<{ data: WeeklyStats }>(`${API_ENDPOINTS.ANALYTICS}/branch/weekly`),
+  getMonthlyStats: (params?: { startDate?: string; endDate?: string; doctorId?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.doctorId) queryParams.append('doctorId', params.doctorId);
+    const query = queryParams.toString();
+    return apiClient.get<{ data: MonthlyStats }>(
+      `${API_ENDPOINTS.ANALYTICS}/branch/monthly${query ? `?${query}` : ''}`
+    );
+  },
 };
