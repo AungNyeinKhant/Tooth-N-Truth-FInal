@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { AdminStatsDto } from './dto/admin-stats.dto';
+import { AdminStatsDto, RevenueTrendDto, RevenueTrendResponseDto, BranchAppointmentDto, AppointmentsByBranchResponseDto, TopServiceDto, TopServicesResponseDto, PatientGrowthDto, PatientGrowthResponseDto } from './dto/admin-stats.dto';
 import {
   DailyStatsDto,
   WeeklyStatsDto,
@@ -14,6 +14,11 @@ import {
 export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
+  // ==================== Admin Analytics ====================
+
+  /**
+   * Get enhanced admin dashboard statistics
+   */
   async getAdminStats(): Promise<AdminStatsDto> {
     // Get today's date range
     const today = new Date();
@@ -21,12 +26,24 @@ export class AnalyticsService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Query all counts in parallel for better performance
+    // Get this month's date range
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Get last month's date range
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+
+    // Run all queries in parallel
     const [
       totalBranches,
       totalDoctors,
       totalPatients,
       totalAppointmentsToday,
+      thisMonthAppointments,
+      lastMonthAppointments,
+      thisMonthNewPatients,
+      lastMonthNewPatients,
     ] = await Promise.all([
       // Count active branches
       this.prisma.branch.count({
@@ -38,7 +55,7 @@ export class AnalyticsService {
         where: { isActive: true },
       }),
 
-      // Count patients (users with PATIENT role who have a patient profile)
+      // Count total patients
       this.prisma.patient.count(),
 
       // Count appointments scheduled for today
@@ -50,14 +67,282 @@ export class AnalyticsService {
           },
         },
       }),
+
+      // This month's appointments
+      this.prisma.appointment.findMany({
+        where: {
+          appointmentDate: {
+            gte: thisMonthStart,
+            lte: thisMonthEnd,
+          },
+        },
+        include: { service: true },
+      }),
+
+      // Last month's appointments
+      this.prisma.appointment.findMany({
+        where: {
+          appointmentDate: {
+            gte: lastMonthStart,
+            lte: lastMonthEnd,
+          },
+        },
+        include: { service: true },
+      }),
+
+      // New patients this month (patients created in this month)
+      this.prisma.patient.count({
+        where: {
+          createdAt: {
+            gte: thisMonthStart,
+            lte: thisMonthEnd,
+          },
+        },
+      }),
+
+      // New patients last month
+      this.prisma.patient.count({
+        where: {
+          createdAt: {
+            gte: lastMonthStart,
+            lte: lastMonthEnd,
+          },
+        },
+      }),
     ]);
+
+    // Calculate this month metrics
+    const totalAppointmentsThisMonth = thisMonthAppointments.length;
+    const completedAppointments = thisMonthAppointments.filter(a => a.status === 'COMPLETED').length;
+    const cancelledAppointments = thisMonthAppointments.filter(a => a.status === 'CANCELLED').length;
+    const noShowAppointments = thisMonthAppointments.filter(a => a.status === 'NO_SHOW').length;
+
+    // Calculate this month's revenue
+    const totalRevenueThisMonth = completedAppointments
+      ? thisMonthAppointments
+          .filter(a => a.status === 'COMPLETED')
+          .reduce((sum, a) => sum + (Number(a.service.price) || 0), 0)
+      : 0;
+
+    // Calculate last month's revenue
+    const lastMonthRevenue = lastMonthAppointments
+      .filter(a => a.status === 'COMPLETED')
+      .reduce((sum, a) => sum + (Number(a.service?.price) || 0), 0);
+
+    // Calculate rates
+    const completionRate = totalAppointmentsThisMonth > 0 
+      ? Math.round((completedAppointments / totalAppointmentsThisMonth) * 100 * 10) / 10 
+      : 0;
+    const cancellationRate = totalAppointmentsThisMonth > 0 
+      ? Math.round((cancelledAppointments / totalAppointmentsThisMonth) * 100 * 10) / 10 
+      : 0;
+    const noShowRate = totalAppointmentsThisMonth > 0 
+      ? Math.round((noShowAppointments / totalAppointmentsThisMonth) * 100 * 10) / 10 
+      : 0;
+
+    // Calculate comparisons
+    const revenueChange = totalRevenueThisMonth - lastMonthRevenue;
+    const revenueChangePercent = lastMonthRevenue > 0 
+      ? Math.round((revenueChange / lastMonthRevenue) * 100 * 10) / 10 
+      : totalRevenueThisMonth > 0 ? 100 : 0;
+    
+    const appointmentsChange = totalAppointmentsThisMonth - lastMonthAppointments.length;
+    const appointmentsChangePercent = lastMonthAppointments.length > 0 
+      ? Math.round((appointmentsChange / lastMonthAppointments.length) * 100 * 10) / 10 
+      : totalAppointmentsThisMonth > 0 ? 100 : 0;
+
+    const patientsChange = thisMonthNewPatients - lastMonthNewPatients;
+    const patientsChangePercent = lastMonthNewPatients > 0 
+      ? Math.round((patientsChange / lastMonthNewPatients) * 100 * 10) / 10 
+      : thisMonthNewPatients > 0 ? 100 : 0;
 
     return {
       totalBranches,
       totalDoctors,
       totalPatients,
       totalAppointmentsToday,
+      totalAppointmentsThisMonth,
+      totalRevenueThisMonth,
+      newPatientsThisMonth: thisMonthNewPatients,
+      completedAppointments,
+      cancelledAppointments,
+      noShowAppointments,
+      completionRate,
+      cancellationRate,
+      noShowRate,
+      revenueChange,
+      revenueChangePercent,
+      appointmentsChange,
+      appointmentsChangePercent,
+      patientsChange,
+      patientsChangePercent,
     };
+  }
+
+  /**
+   * Get revenue trend for last 12 months
+   */
+  async getRevenueTrend(): Promise<RevenueTrendResponseDto> {
+    const today = new Date();
+    const data: RevenueTrendDto[] = [];
+
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59, 999);
+      
+      const appointments = await this.prisma.appointment.findMany({
+        where: {
+          appointmentDate: {
+            gte: monthDate,
+            lte: monthEnd,
+          },
+          status: 'COMPLETED',
+        },
+        include: { service: true },
+      });
+
+      const revenue = appointments.reduce((sum, a) => sum + (Number(a.service.price) || 0), 0);
+      const totalAppointments = await this.prisma.appointment.count({
+        where: {
+          appointmentDate: {
+            gte: monthDate,
+            lte: monthEnd,
+          },
+        },
+      });
+
+      data.push({
+        month: monthDate.toLocaleString('default', { month: 'short' }),
+        year: monthDate.getFullYear(),
+        revenue,
+        appointments: totalAppointments,
+      });
+    }
+
+    const totalRevenue = data.reduce((sum, d) => sum + d.revenue, 0);
+    const avgMonthlyRevenue = Math.round(totalRevenue / 12);
+
+    return { data, totalRevenue, avgMonthlyRevenue };
+  }
+
+  /**
+   * Get appointments grouped by branch
+   */
+  async getAppointmentsByBranch(): Promise<AppointmentsByBranchResponseDto> {
+    const branches = await this.prisma.branch.findMany({
+      where: { isActive: true },
+      include: {
+        appointments: {
+          include: { service: true },
+        },
+      },
+    });
+
+    const branchData: BranchAppointmentDto[] = branches.map(branch => {
+      const completed = branch.appointments.filter(a => a.status === 'COMPLETED').length;
+      const cancelled = branch.appointments.filter(a => a.status === 'CANCELLED').length;
+      const noShow = branch.appointments.filter(a => a.status === 'NO_SHOW').length;
+      const revenue = branch.appointments
+        .filter(a => a.status === 'COMPLETED')
+        .reduce((sum, a) => sum + (Number(a.service.price) || 0), 0);
+
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        totalAppointments: branch.appointments.length,
+        completed,
+        cancelled,
+        noShow,
+        revenue,
+      };
+    });
+
+    // Sort by total appointments
+    branchData.sort((a, b) => b.totalAppointments - a.totalAppointments);
+
+    const totalAppointments = branchData.reduce((sum, b) => sum + b.totalAppointments, 0);
+
+    return {
+      branches: branchData,
+      totalAppointments,
+      topBranch: branchData.length > 0 ? branchData[0] : null,
+    };
+  }
+
+  /**
+   * Get top services by revenue
+   */
+  async getTopServices(limit: number = 10): Promise<TopServicesResponseDto> {
+    const appointments = await this.prisma.appointment.findMany({
+      where: { status: 'COMPLETED' },
+      include: { service: true },
+    });
+
+    const serviceMap = new Map<string, TopServiceDto>();
+    
+    appointments.forEach(apt => {
+      const existing = serviceMap.get(apt.serviceId);
+      if (existing) {
+        existing.appointmentCount++;
+        existing.revenue += Number(apt.service.price) || 0;
+      } else {
+        serviceMap.set(apt.serviceId, {
+          serviceId: apt.serviceId,
+          serviceName: apt.service.name,
+          appointmentCount: 1,
+          revenue: Number(apt.service.price) || 0,
+        });
+      }
+    });
+
+    const services = Array.from(serviceMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, limit);
+
+    const totalRevenue = services.reduce((sum, s) => sum + s.revenue, 0);
+
+    return { services, totalRevenue };
+  }
+
+  /**
+   * Get patient growth data for last 12 months
+   */
+  async getPatientGrowth(): Promise<PatientGrowthResponseDto> {
+    const today = new Date();
+    const data: PatientGrowthDto[] = [];
+    let runningTotal = 0;
+
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59, 999);
+      
+      const newPatients = await this.prisma.patient.count({
+        where: {
+          createdAt: {
+            gte: monthDate,
+            lte: monthEnd,
+          },
+        },
+      });
+
+      runningTotal += newPatients;
+
+      data.push({
+        month: monthDate.toLocaleString('default', { month: 'short' }),
+        year: monthDate.getFullYear(),
+        newPatients,
+        totalPatients: runningTotal,
+      });
+    }
+
+    const totalNewPatients = data.reduce((sum, d) => sum + d.newPatients, 0);
+    const firstMonthPatients = data[0]?.totalPatients || 0;
+    const lastMonthPatients = data[data.length - 1]?.totalPatients || 0;
+    const growthRate = firstMonthPatients > 0 
+      ? Math.round(((lastMonthPatients - firstMonthPatients) / firstMonthPatients) * 100 * 10) / 10 
+      : 0;
+
+    return { data, totalNewPatients, growthRate };
   }
 
   // ==================== Branch Manager Analytics ====================
