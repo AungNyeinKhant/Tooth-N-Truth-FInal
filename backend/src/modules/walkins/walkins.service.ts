@@ -313,27 +313,32 @@ export class WalkinsService {
       isWalkIn: true,
     };
 
-    // Date filter (optional - if not provided, show all)
-    if (date && date !== 'all') {
-      let startDate: Date;
-      let endDate: Date;
+    // Date filter (optional - if not provided or 'all', show all)
+    console.log('[WalkIns Service] date param:', date);
+    
+    if (date === 'today') {
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
 
-      if (date === 'today') {
-        startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date();
-        endDate.setHours(23, 59, 59, 999);
-      } else {
-        startDate = new Date(date);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(date);
-        endDate.setHours(23, 59, 59, 999);
-      }
-
-      where.checkInTime = {
+      where.appointmentDate = {
         gte: startDate,
         lte: endDate,
       };
+    } else if (date && date !== 'all') {
+      // Specific date filter (for future use)
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+
+      where.appointmentDate = {
+        gte: startDate,
+        lte: endDate,
+      };
+    } else {
+      console.log('[WalkIns Service] No date filter - fetching all');
     }
 
     // Map walk-in status to appointment status
