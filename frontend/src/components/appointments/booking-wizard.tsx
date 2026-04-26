@@ -65,6 +65,8 @@ export function BookingWizard() {
     setBranch,
     setService,
     setDoctor,
+    setDate,
+    setSlot,
     reset,
   } = useAppointmentStore();
 
@@ -81,21 +83,21 @@ export function BookingWizard() {
     router.replace(url.toString(), { scroll: false });
   }, [router]);
 
-  // Load state from URL params on mount
+  // Load branches, services, and set URL params
   useEffect(() => {
-    const branchId = searchParams.get("branch");
-    const serviceId = searchParams.get("service");
-    const doctorId = searchParams.get("doctor");
-    const dateStr = searchParams.get("date");
-    const time = searchParams.get("time");
-    const step = searchParams.get("step");
+    const urlParams = new URLSearchParams(window.location.search);
+    const branchId = urlParams.get("branch");
+    const serviceId = urlParams.get("service");
+    const doctorId = urlParams.get("doctor");
+    const dateStr = urlParams.get("date");
+    const time = urlParams.get("time");
+    const step = urlParams.get("step");
 
     if (step) {
       setCurrentStep(parseInt(step, 10));
     }
 
-    // Load initial data first
-    const loadInitialData = async () => {
+    const loadData = async () => {
       setLoading(true);
       try {
         const [branchesRes, servicesRes] = await Promise.all([
@@ -106,62 +108,65 @@ export function BookingWizard() {
         const branchesList = extractList(branchesRes);
         const servicesList = extractList(servicesRes);
 
-        setBranches(Array.isArray(branchesList) ? branchesList : []);
-        setServices(Array.isArray(servicesList) ? servicesList : []);
+        setBranches(branchesList);
+        setServices(servicesList);
 
-        // Find and set branch from URL
+        // Set branch from URL
         if (branchId) {
           const branch = branchesList.find((b: any) => b.id === branchId);
           if (branch) {
-            console.log('[Booking] Setting branch from URL:', branch);
             setBranch(branch);
           }
         }
 
-        // Find and set service from URL
+        // Set service from URL
         if (serviceId) {
           const service = servicesList.find((s: any) => s.id === serviceId);
           if (service) {
-            console.log('[Booking] Setting service from URL:', service);
             setService(service);
           }
         }
+
+        // Set date from URL
+        if (dateStr) {
+          const date = new Date(dateStr + 'T00:00:00');
+          if (!isNaN(date.getTime())) {
+            setDate(date);
+          }
+        }
       } catch (error) {
-        console.error("Failed to load initial data:", error);
-        addToast("Failed to load initial data", "error");
+        addToast("Failed to load data", "error");
       } finally {
         setLoading(false);
       }
     };
 
-    loadInitialData();
+    loadData();
   }, []);
 
-  // Load doctors when branch is selected (from URL or store)
+  // Load doctors when branch is selected
   useEffect(() => {
-    console.log('[Booking] selectedBranch changed:', selectedBranch);
     if (selectedBranch) {
       const loadDoctors = async () => {
         setLoading(true);
-        console.log('[Booking] Loading doctors for branch:', selectedBranch.id);
+        
+        // Get doctorId from URL using window.location
+        const urlParams = new URLSearchParams(window.location.search);
+        const doctorId = urlParams.get("doctor");
+        
         try {
           const res = await doctorsApi.getAll({ branchId: selectedBranch.id });
-          console.log('[Booking] Doctors API response:', res.data);
           const doctorsList = extractList(res);
-          console.log('[Booking] Extracted doctors list:', doctorsList);
           setDoctors(Array.isArray(doctorsList) ? doctorsList : []);
 
           // Check if doctor is in URL
-          const doctorId = searchParams.get("doctor");
           if (doctorId) {
             const doctor = doctorsList.find((d: any) => d.id === doctorId);
             if (doctor) {
-              console.log('[Booking] Setting doctor from URL:', doctor);
               setDoctor(doctor);
             }
           }
         } catch (error) {
-          console.error("Failed to load doctors:", error);
           addToast("Failed to load doctors", "error");
           setDoctors([]);
         } finally {
@@ -202,16 +207,20 @@ export function BookingWizard() {
           
           setAvailableSlots(Array.isArray(slotsData) ? slotsData : []);
 
-          // Check if time is in URL
-          const time = searchParams.get("time");
-          if (time) {
-            const slot = slotsData.find((s: any) => s.startTime === time);
+          // Get time from URL using window.location
+          const urlParams = new URLSearchParams(window.location.search);
+          const timeFromUrl = urlParams.get("time");
+          
+          if (timeFromUrl) {
+            // Decode the time if needed (URL encoding)
+            const decodedTime = decodeURIComponent(timeFromUrl);
+            
+            const slot = slotsData.find((s: any) => s.startTime === decodedTime);
             if (slot) {
-              useAppointmentStore.getState().setSlot(slot);
+              setSlot(slot);
             }
           }
         } catch (error) {
-          console.error("Failed to load available slots:", error);
           addToast("Failed to load available slots", "error");
           setAvailableSlots([]);
         } finally {
@@ -221,7 +230,7 @@ export function BookingWizard() {
 
       loadSlots();
     }
-  }, [selectedDoctor, selectedDate, selectedService]);
+  }, [selectedDoctor, selectedDate, selectedService, searchParams]);
 
   // Handle step change and update URL
   const handleStepChange = (newStep: number) => {

@@ -27,7 +27,7 @@ export default function Home() {
       <section
         className="relative min-h-[92vh] flex items-center"
         style={{
-          backgroundImage: "linear-gradient(to right, rgba(10,22,40,0.92) 55%, rgba(10,22,40,0.45)), url('/hero-dental.jpg')",
+          backgroundImage: "linear-gradient(to right, rgba(10,22,40,0.92) 55%, rgba(10,22,40,0.45)), url('/hero-dental.jpg?v=1')",
           backgroundSize: 'cover',
           backgroundPosition: 'center top',
         }}
@@ -173,7 +173,7 @@ export default function Home() {
               <div
                 className="absolute inset-0"
                 style={{
-                  backgroundImage: "url('/hero-dental.jpg')",
+                  backgroundImage: "url('/hero-dental.jpg?v=1')",
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                 }}

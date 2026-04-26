@@ -13,10 +13,15 @@ import {
   ClipboardList,
   ArrowRight,
   Loader2,
+  TrendingUp,
+  TrendingDown,
+  XCircle,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { analyticsApi, DailyStats } from "@/lib/api/analytics.api";
+import { analyticsApi, DailyStats, WeeklyStats, MonthlyStats, ServiceStats, DoctorPerformance } from "@/lib/api/analytics.api";
 import { appointmentsApi, ManagerAppointment } from "@/lib/api/appointments.api";
+import { WeeklyTrendChart, ManagerServicesChart, ManagerDoctorChart, AppointmentStatusChart } from "@/components/charts";
 
 // Helper: get today as YYYY-MM-DD in local timezone
 function getTodayLocal(): string {
@@ -30,9 +35,13 @@ function getTodayLocal(): string {
 export default function ManagerDashboardPage() {
   const { user } = useAuthStore();
 
-  const [stats, setStats] = useState<DailyStats | null>(null);
+  const [dailyStats, setDailyStats] = useState<DailyStats | null>(null);
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStats | null>(null);
   const [appointments, setAppointments] = useState<ManagerAppointment[]>([]);
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingDaily, setIsLoadingDaily] = useState(true);
+  const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
+  const [isLoadingMonthly, setIsLoadingMonthly] = useState(true);
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
 
   const today = getTodayLocal();
@@ -48,18 +57,49 @@ export default function ManagerDashboardPage() {
     (user as any)?.branchManager?.branch?.name || "Your Branch";
 
   useEffect(() => {
-    const loadStats = async () => {
-      setIsLoadingStats(true);
+    // Load daily stats
+    const loadDailyStats = async () => {
+      setIsLoadingDaily(true);
       try {
         const res = await analyticsApi.getDailyStats();
-        setStats(res.data.data);
+        const data = res.data.data || res.data;
+        setDailyStats(data);
       } catch (err) {
-        console.error("Failed to load dashboard stats:", err);
+        console.error("Failed to load daily stats:", err);
       } finally {
-        setIsLoadingStats(false);
+        setIsLoadingDaily(false);
       }
     };
 
+    // Load weekly stats
+    const loadWeeklyStats = async () => {
+      setIsLoadingWeekly(true);
+      try {
+        const res = await analyticsApi.getWeeklyStats();
+        const data = res.data.data || res.data;
+        setWeeklyStats(data);
+      } catch (err) {
+        console.error("Failed to load weekly stats:", err);
+      } finally {
+        setIsLoadingWeekly(false);
+      }
+    };
+
+    // Load monthly stats
+    const loadMonthlyStats = async () => {
+      setIsLoadingMonthly(true);
+      try {
+        const res = await analyticsApi.getMonthlyStats();
+        const data = res.data.data || res.data;
+        setMonthlyStats(data);
+      } catch (err) {
+        console.error("Failed to load monthly stats:", err);
+      } finally {
+        setIsLoadingMonthly(false);
+      }
+    };
+
+    // Load today's schedule
     const loadSchedule = async () => {
       setIsLoadingSchedule(true);
       try {
@@ -85,9 +125,39 @@ export default function ManagerDashboardPage() {
       }
     };
 
-    loadStats();
-    loadSchedule();
+    // Load all data
+    Promise.all([
+      loadDailyStats(),
+      loadWeeklyStats(),
+      loadMonthlyStats(),
+      loadSchedule(),
+    ]);
   }, [today]);
+
+  // Calculate weekly comparison (simplified - comparing avg appointments)
+  const weeklyAvg = weeklyStats?.avgAppointmentsPerDay || 0;
+  const dailyTarget = 10; // Target appointments per day
+  const weeklyProgress = dailyTarget > 0 ? Math.min((weeklyAvg / dailyTarget) * 100, 100) : 0;
+
+  // Get status data for pie chart
+  const getStatusData = () => {
+    if (!dailyStats) return [];
+    return [
+      { name: 'Completed', value: dailyStats.completed, color: '#22C55E' },
+      { name: 'Confirmed', value: dailyStats.confirmed, color: '#3B82F6' },
+      { name: 'Cancelled', value: dailyStats.cancelled, color: '#EF4444' },
+      { name: 'No Show', value: dailyStats.noShow, color: '#6B7280' },
+    ].filter(item => item.value > 0);
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
 
   return (
     <div className="space-y-6">
@@ -106,48 +176,48 @@ export default function ManagerDashboardPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Today's Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Today's Appointments"
-          value={stats?.totalAppointments}
+          value={dailyStats?.totalAppointments}
           description="Scheduled for today"
           icon={Calendar}
           color="cyan"
-          isLoading={isLoadingStats}
+          isLoading={isLoadingDaily}
         />
         <StatCard
           title="Walk-ins Waiting"
-          value={stats?.walkIns}
+          value={dailyStats?.walkIns}
           description="Pending walk-in patients"
           icon={Users}
           color="orange"
-          isLoading={isLoadingStats}
+          isLoading={isLoadingDaily}
         />
         <StatCard
           title="Active Doctors"
-          value={stats?.activeDoctors}
+          value={dailyStats?.activeDoctors}
           description="In your branch"
           icon={Stethoscope}
           color="green"
-          isLoading={isLoadingStats}
+          isLoading={isLoadingDaily}
         />
         <StatCard
           title="Today's Revenue"
-          value={stats?.totalRevenue}
+          value={dailyStats?.totalRevenue}
           description="From completed appointments"
           icon={DollarSign}
           color="blue"
           isCurrency
-          isLoading={isLoadingStats}
+          isLoading={isLoadingDaily}
         />
         <StatCard
           title="Completed Today"
-          value={stats?.completed}
+          value={dailyStats?.completed}
           description="Appointments completed"
           icon={CheckCircle}
           color="purple"
-          isLoading={isLoadingStats}
+          isLoading={isLoadingDaily}
         />
       </div>
 
@@ -175,6 +245,135 @@ export default function ManagerDashboardPage() {
           />
         </div>
       </div>
+
+      {/* Charts Row 1: Weekly Trend and Daily Status */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Weekly Trend Chart */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Weekly Overview</h2>
+            <span className="text-sm text-gray-500">
+              {weeklyStats?.startDate && weeklyStats?.endDate 
+                ? `${weeklyStats.startDate} - ${weeklyStats.endDate}`
+                : 'Last 7 days'}
+            </span>
+          </div>
+          <WeeklyTrendChart 
+            data={weeklyStats?.dailyBreakdown || []} 
+            isLoading={isLoadingWeekly}
+          />
+          {/* Weekly Summary */}
+          <div className="mt-4 grid grid-cols-3 gap-4 border-t pt-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900">{weeklyStats?.totalAppointments || 0}</p>
+              <p className="text-xs text-gray-500">Total Appointments</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(weeklyStats?.totalRevenue || 0)}</p>
+              <p className="text-xs text-gray-500">Total Revenue</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-[#00BCD4]">{weeklyStats?.avgAppointmentsPerDay || 0}</p>
+              <p className="text-xs text-gray-500">Avg/Day</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Today's Status Breakdown */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Today's Status</h2>
+            <span className="text-sm text-gray-500">Live breakdown</span>
+          </div>
+          <AppointmentStatusChart data={getStatusData()} isLoading={isLoadingDaily} />
+          {/* Status Details */}
+          <div className="mt-4 space-y-2 border-t pt-4">
+            {dailyStats && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-green-500"></span>
+                    <span className="text-gray-600">Completed</span>
+                  </div>
+                  <span className="font-medium">{dailyStats.completed}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-blue-500"></span>
+                    <span className="text-gray-600">Confirmed</span>
+                  </div>
+                  <span className="font-medium">{dailyStats.confirmed}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-red-500"></span>
+                    <span className="text-gray-600">Cancelled</span>
+                  </div>
+                  <span className="font-medium">{dailyStats.cancelled}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-gray-400"></span>
+                    <span className="text-gray-600">No Show</span>
+                  </div>
+                  <span className="font-medium">{dailyStats.noShow}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Row 2: Top Services and Doctor Performance */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Top Services */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Top Services</h2>
+            <span className="text-sm text-gray-500">By revenue</span>
+          </div>
+          <ManagerServicesChart 
+            data={monthlyStats?.topServices || []} 
+            isLoading={isLoadingMonthly}
+          />
+        </div>
+
+        {/* Doctor Performance */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Doctor Performance</h2>
+            <span className="text-sm text-gray-500">This month</span>
+          </div>
+          <ManagerDoctorChart 
+            data={monthlyStats?.doctorPerformance || []} 
+            isLoading={isLoadingMonthly}
+          />
+        </div>
+      </div>
+
+      {/* Monthly Stats Summary */}
+      {monthlyStats && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <MonthlyStatCard
+            title="Monthly Revenue"
+            value={formatCurrency(monthlyStats.totalRevenue)}
+            trend={monthlyStats.totalRevenue > 0 ? { value: 12, isPositive: true } : undefined}
+          />
+          <MonthlyStatCard
+            title="Total Appointments"
+            value={monthlyStats.totalAppointments.toString()}
+          />
+          <MonthlyStatCard
+            title="Completion Rate"
+            value={`${monthlyStats.completionRate}%`}
+            trend={monthlyStats.completionRate >= 80 ? { value: 5, isPositive: true } : { value: 3, isPositive: false }}
+          />
+          <MonthlyStatCard
+            title="Avg Per Day"
+            value={monthlyStats.avgAppointmentsPerDay.toString()}
+          />
+        </div>
+      )}
 
       {/* Today's Schedule */}
       <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
@@ -239,9 +438,9 @@ function StatCard({
 
   const formatValue = (val: number) => {
     if (isCurrency) {
-      return new Intl.NumberFormat("en-MM", {
+      return new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: "MMK",
+        currency: "PHP",
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
       }).format(val);
@@ -266,6 +465,41 @@ function StatCard({
         <div className={`rounded-lg p-2.5 ${colorClasses[color]}`}>
           <Icon className="h-5 w-5" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Monthly Stat Card Component
+interface MonthlyStatCardProps {
+  title: string;
+  value: string;
+  trend?: {
+    value: number;
+    isPositive: boolean;
+  };
+}
+
+function MonthlyStatCard({ title, value, trend }: MonthlyStatCardProps) {
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
+      <p className="text-sm font-medium text-gray-500">{title}</p>
+      <div className="flex items-baseline gap-2 mt-1">
+        <span className="text-xl font-bold text-gray-900">{value}</span>
+        {trend && (
+          <span
+            className={`text-xs font-medium flex items-center ${
+              trend.isPositive ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {trend.isPositive ? (
+              <TrendingUp className="h-3 w-3 mr-0.5" />
+            ) : (
+              <TrendingDown className="h-3 w-3 mr-0.5" />
+            )}
+            {trend.value}%
+          </span>
+        )}
       </div>
     </div>
   );

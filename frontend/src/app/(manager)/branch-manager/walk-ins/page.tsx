@@ -61,10 +61,10 @@ export default function WalkInsPage() {
   // Filter state
   const statusFilterRef = useRef<WalkInStatus | "">("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const dateFilterRef = useRef<string>("all");
+  const dateFilterRef = useRef<string>("today");
   const [statusFilter, setStatusFilter] = useState<WalkInStatus | "">("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("today");
 
   // Modal state
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -80,11 +80,14 @@ export default function WalkInsPage() {
   // Fetch data
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    // Only send 'today' when dateFilter is 'today', otherwise send undefined to get all
+    const dateParam = dateFilter === 'today' ? 'today' : undefined;
+    console.log('[WalkIns] dateFilter state:', dateFilter, '-> sending to API:', dateParam);
     try {
       const [walkInsRes, doctorsData, servicesData] = await Promise.all([
         getWalkInQueue({
           status: statusFilterRef.current || undefined,
-          date: dateFilterRef.current,
+          date: dateParam,
           search: searchQuery || undefined,
           page,
           limit,
@@ -92,6 +95,8 @@ export default function WalkInsPage() {
         slotsApi.getDoctors(),
         servicesApi.getAll({ status: "active", limit: 50 }),
       ]);
+
+      console.log('[WalkIns] API returned:', walkInsRes.data.length, 'items');
 
       setWalkIns(walkInsRes.data);
       setTotal(walkInsRes.meta.total);
@@ -113,7 +118,7 @@ export default function WalkInsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [addToast, page, limit, searchQuery]);
+  }, [addToast, page, limit, searchQuery, dateFilter]);
 
   useEffect(() => {
     fetchData();

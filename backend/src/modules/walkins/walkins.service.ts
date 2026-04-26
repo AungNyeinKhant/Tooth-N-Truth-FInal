@@ -313,26 +313,30 @@ export class WalkinsService {
       isWalkIn: true,
     };
 
-    // Date filter (optional - if not provided, show all)
-    if (date && date !== 'all') {
-      let startDate: Date;
-      let endDate: Date;
-
-      if (date === 'today') {
-        startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date();
-        endDate.setHours(23, 59, 59, 999);
-      } else {
-        startDate = new Date(date);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(date);
-        endDate.setHours(23, 59, 59, 999);
-      }
-
+    // Date filter (optional - if not provided or 'all', show all)
+    console.log('[WalkIns Service] date param:', date, 'value:', date);
+    
+    if (date === 'today') {
+      // Use checkInTime which is set when walk-in is created
+      const now = new Date();
+      const startOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+      const endOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+      
+      console.log('[WalkIns Service] Filtering checkInTime:', startOfDayUTC.toISOString(), 'to', endOfDayUTC.toISOString());
+      
       where.checkInTime = {
-        gte: startDate,
-        lte: endDate,
+        gte: startOfDayUTC,
+        lte: endOfDayUTC,
+      };
+    } else if (date && date !== 'all') {
+      // Specific date filter (for future use)
+      const [year, month, day] = date.split('-').map(Number);
+      const startDateUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+      const endDateUTC = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+      
+      where.checkInTime = {
+        gte: startDateUTC,
+        lte: endDateUTC,
       };
     }
 

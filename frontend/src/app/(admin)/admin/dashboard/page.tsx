@@ -2,73 +2,77 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
-import { analyticsApi } from "@/lib/api/analytics.api";
+import { analyticsApi, AdminStats, RevenueTrend, BranchAppointment, TopService } from "@/lib/api/analytics.api";
 import { StatCard, StatsGrid } from "./components/stat-card";
+import { RevenueTrendChart, AppointmentsByBranchChart, TopServicesChart, AppointmentStatusChart } from "@/components/charts";
 import {
   Building2,
   Stethoscope,
   Users,
   Calendar,
   TrendingUp,
+  TrendingDown,
+  DollarSign,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  UserPlus,
+  Activity,
 } from "lucide-react";
-
-interface DashboardStats {
-  totalBranches: number;
-  totalDoctors: number;
-  totalPatients: number;
-  totalAppointmentsToday: number;
-}
 
 export default function AdminDashboardPage() {
   const { user } = useAuthStore();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalBranches: 0,
-    totalDoctors: 0,
-    totalPatients: 0,
-    totalAppointmentsToday: 0,
-  });
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [revenueTrend, setRevenueTrend] = useState<RevenueTrend[]>([]);
+  const [branchData, setBranchData] = useState<BranchAppointment[]>([]);
+  const [topServices, setTopServices] = useState<TopService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [chartsLoading, setChartsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       setError(null);
-      
+
       try {
-        console.log('[Dashboard] Fetching stats...');
-        const response = await analyticsApi.getAdminStats();
-        console.log('[Dashboard] API Response:', response);
-        console.log('[Dashboard] Response data:', response.data);
-        
-        // Handle different response structures
-        let data: any = response.data;
-        
-        // If data is wrapped in a data property (common NestJS pattern)
-        if (data && typeof data === 'object' && 'data' in data) {
-          data = (data as any).data;
+        // Fetch main stats
+        const statsResponse = await analyticsApi.getAdminStats();
+        let statsData = statsResponse.data;
+        if (statsData && 'data' in statsData) {
+          statsData = (statsData as any).data;
         }
-        
-        console.log('[Dashboard] Processed data:', data);
-        
-        if (data && typeof data === 'object') {
-          setStats({
-            totalBranches: data.totalBranches ?? 0,
-            totalDoctors: data.totalDoctors ?? 0,
-            totalPatients: data.totalPatients ?? 0,
-            totalAppointmentsToday: data.totalAppointmentsToday ?? 0,
-          });
-          console.log('[Dashboard] Stats set successfully');
-        } else {
-          console.error('[Dashboard] Invalid data format:', data);
-          setError('Invalid data format received');
+        setStats(statsData);
+
+        // Fetch chart data
+        setChartsLoading(true);
+        try {
+          const [revenueRes, branchRes, servicesRes] = await Promise.all([
+            analyticsApi.getRevenueTrend(),
+            analyticsApi.getAppointmentsByBranch(),
+            analyticsApi.getTopServices(8),
+          ]);
+
+          let revenueData = revenueRes.data;
+          let branchResponseData = branchRes.data;
+          let servicesResponseData = servicesRes.data;
+
+          if (revenueData && 'data' in revenueData) revenueData = (revenueData as any).data;
+          if (branchResponseData && 'data' in branchResponseData) branchResponseData = (branchResponseData as any).data;
+          if (servicesResponseData && 'data' in servicesResponseData) servicesResponseData = (servicesResponseData as any).data;
+
+          setRevenueTrend(revenueData?.data || []);
+          setBranchData(branchResponseData?.branches || []);
+          setTopServices(servicesResponseData?.services || []);
+        } catch (chartErr) {
+          console.error('[Dashboard] Error fetching chart data:', chartErr);
+          // Don't fail the whole page if charts fail
+        } finally {
+          setChartsLoading(false);
         }
+
       } catch (err: any) {
         console.error('[Dashboard] Error fetching stats:', err);
-        console.error('[Dashboard] Error response:', err.response);
-        console.error('[Dashboard] Error status:', err.response?.status);
-        console.error('[Dashboard] Error data:', err.response?.data);
-        
         if (err.response?.status === 401) {
           setError('Unauthorized - Please login as admin');
         } else if (err.response?.status === 403) {
@@ -81,7 +85,7 @@ export default function AdminDashboardPage() {
       }
     };
 
-    fetchStats();
+    fetchData();
   }, []);
 
   const currentDate = new Date().toLocaleDateString("en-US", {
@@ -90,6 +94,25 @@ export default function AdminDashboardPage() {
     month: "long",
     day: "numeric",
   });
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  // Calculate status data for pie chart
+  const getStatusData = () => {
+    if (!stats) return [];
+    return [
+      { name: 'Completed', value: stats.completedAppointments, color: '#22C55E' },
+      { name: 'Cancelled', value: stats.cancelledAppointments, color: '#EF4444' },
+      { name: 'No Show', value: stats.noShowAppointments, color: '#6B7280' },
+    ].filter(item => item.value > 0);
+  };
 
   return (
     <div className="space-y-6">
@@ -112,41 +135,154 @@ export default function AdminDashboardPage() {
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           <p className="font-medium">Error loading dashboard</p>
           <p className="text-sm">{error}</p>
-          <p className="text-xs mt-1">Check browser console for details</p>
         </div>
       )}
 
-      {/* Stats Cards */}
+      {/* Primary Stats Cards */}
+      <StatsGrid>
+        <StatCard
+          title="Monthly Revenue"
+          value={formatCurrency(stats?.totalRevenueThisMonth || 0)}
+          description="This month's revenue"
+          icon={DollarSign}
+          trend={stats ? {
+            value: stats.revenueChangePercent,
+            isPositive: stats.revenueChange >= 0,
+          } : undefined}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Total Appointments"
+          value={stats?.totalAppointmentsThisMonth || 0}
+          description="This month"
+          icon={Calendar}
+          trend={stats ? {
+            value: stats.appointmentsChangePercent,
+            isPositive: stats.appointmentsChange >= 0,
+          } : undefined}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="New Patients"
+          value={stats?.newPatientsThisMonth || 0}
+          description="This month"
+          icon={UserPlus}
+          trend={stats ? {
+            value: stats.patientsChangePercent,
+            isPositive: stats.patientsChange >= 0,
+          } : undefined}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Completion Rate"
+          value={`${stats?.completionRate || 0}%`}
+          description="This month"
+          icon={CheckCircle}
+          isLoading={isLoading}
+        />
+      </StatsGrid>
+
+      {/* Secondary Stats */}
       <StatsGrid>
         <StatCard
           title="Total Branches"
-          value={stats.totalBranches}
+          value={stats?.totalBranches || 0}
           description="Active clinic locations"
           icon={Building2}
           isLoading={isLoading}
         />
         <StatCard
           title="Total Doctors"
-          value={stats.totalDoctors}
+          value={stats?.totalDoctors || 0}
           description="Healthcare professionals"
           icon={Stethoscope}
           isLoading={isLoading}
         />
         <StatCard
           title="Total Patients"
-          value={stats.totalPatients}
+          value={stats?.totalPatients || 0}
           description="Registered patients"
           icon={Users}
           isLoading={isLoading}
         />
         <StatCard
           title="Today's Appointments"
-          value={stats.totalAppointmentsToday}
+          value={stats?.totalAppointmentsToday || 0}
           description="Scheduled for today"
-          icon={Calendar}
+          icon={Activity}
           isLoading={isLoading}
         />
       </StatsGrid>
+
+      {/* Charts Row 1: Revenue Trend and Status Breakdown */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Revenue Trend */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Revenue Trend</h2>
+            <span className="text-sm text-gray-500">Last 12 months</span>
+          </div>
+          <RevenueTrendChart data={revenueTrend} isLoading={chartsLoading} />
+        </div>
+
+        {/* Appointment Status Breakdown */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Appointment Status</h2>
+            <span className="text-sm text-gray-500">This month</span>
+          </div>
+          <AppointmentStatusChart data={getStatusData()} isLoading={isLoading} />
+          {/* Status Legend */}
+          <div className="mt-4 space-y-2">
+            {stats && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-green-500"></span>
+                    <span className="text-gray-600">Completed</span>
+                  </div>
+                  <span className="font-medium">{stats.completedAppointments}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-red-500"></span>
+                    <span className="text-gray-600">Cancelled</span>
+                  </div>
+                  <span className="font-medium">{stats.cancelledAppointments}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-gray-400"></span>
+                    <span className="text-gray-600">No Show</span>
+                  </div>
+                  <span className="font-medium">{stats.noShowAppointments}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Row 2: Appointments by Branch and Top Services */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Appointments by Branch */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Appointments by Branch</h2>
+            <span className="text-sm text-gray-500">All time</span>
+          </div>
+          <AppointmentsByBranchChart data={branchData} isLoading={chartsLoading} />
+        </div>
+
+        {/* Top Services */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Top Services by Revenue</h2>
+            <span className="text-sm text-gray-500">All time</span>
+          </div>
+          <TopServicesChart data={topServices} isLoading={chartsLoading} />
+        </div>
+      </div>
 
       {/* Quick Actions */}
       <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
@@ -175,37 +311,9 @@ export default function AdminDashboardPage() {
           <QuickActionCard
             title="View Reports"
             description="Check analytics & reports"
-            href="/admin/reports"
+            href="/admin/analytics"
             icon={TrendingUp}
           />
-        </div>
-      </div>
-
-      {/* Recent Activity Placeholder */}
-      <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Recent Activity
-        </h2>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 p-3 rounded-lg bg-gray-50"
-            >
-              <div className="h-10 w-10 rounded-full bg-[#00BCD4]/10 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-[#00BCD4]" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">
-                  New appointment booked
-                </p>
-                <p className="text-xs text-gray-500">
-                  Patient: John Doe - Branch: Downtown
-                </p>
-              </div>
-              <span className="text-xs text-gray-400">2 hours ago</span>
-            </div>
-          ))}
         </div>
       </div>
     </div>
